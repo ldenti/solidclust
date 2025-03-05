@@ -1,7 +1,7 @@
 #ifndef IOC_RADSORT_H
 #define IOC_RADSORT_H
 
-// Code adapted from https://gist.github.com/attractivechaos/2886685
+/* Code adapted from https://gist.github.com/attractivechaos/2886685 */
 
 #include <stdint.h>
 #include <stdio.h>
@@ -12,13 +12,13 @@ typedef struct {
   uint32_t b;
 } pair_t;
 
-#define rstype_t pair_t  // type of the array
-#define rskey(x) ((x).b) // specify how to get the integer from rstype_t
+#define rstype_t pair_t  /* type of the array */
+#define rskey(x) ((x).b) /* specify how to get the integer from rstype_t */
 
-#define RS_MIN_SIZE 64 // for an array smaller than this, use insertion sort
+#define RS_MIN_SIZE 64 /* for an array smaller than this, use insertion sort */
 
 typedef struct {
-  rstype_t *b, *e; // begin and end of each bucket
+  rstype_t *b, *e; /* begin and end of each bucket */
 } rsbucket_t;
 
 /* Insertion sort */

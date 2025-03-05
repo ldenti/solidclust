@@ -32,9 +32,9 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define KS_SEP_SPACE 0 // isspace(): \t, \n, \v, \f, \r
-#define KS_SEP_TAB   1 // isspace() && !' '
-#define KS_SEP_LINE  2 // line separator: "\n" (Unix) or "\r\n" (Windows)
+#define KS_SEP_SPACE 0 /* isspace(): \t, \n, \v, \f, \r */
+#define KS_SEP_TAB   1 /* isspace() && !' ' */
+#define KS_SEP_LINE  2 /* line separator: "\n" (Unix) or "\r\n" (Windows) */
 #define KS_SEP_MAX   2
 
 #ifndef klib_unused
@@ -71,8 +71,10 @@
 		free(ks); \
 	}
 
+#if (__STDC_VERSION__ >= 199901L) 
 #define __KS_INLINED(__read) \
-	static klib_unused inline int ks_getc(kstream_t *ks) \
+	static klib_unused inline \
+	int ks_getc(kstream_t *ks) \
 	{ \
 		if (ks->is_eof && ks->begin >= ks->end) return -1; \
 		if (ks->begin >= ks->end) { \
@@ -85,6 +87,23 @@
 	} \
 	static inline int ks_getuntil(kstream_t *ks, int delimiter, kstring_t *str, int *dret) \
 	{ return ks_getuntil2(ks, delimiter, str, dret, 0); }
+#else
+#define __KS_INLINED(__read) \
+	static klib_unused \
+	int ks_getc(kstream_t *ks) \
+	{ \
+		if (ks->is_eof && ks->begin >= ks->end) return -1; \
+		if (ks->begin >= ks->end) { \
+			ks->begin = 0; \
+			ks->end = __read(ks->f, ks->buf, ks->bufsize); \
+			if (ks->end < ks->bufsize) ks->is_eof = 1; \
+			if (ks->end == 0) return -1; \
+		} \
+		return (int)ks->buf[ks->begin++]; \
+	} \
+	static int ks_getuntil(kstream_t *ks, int delimiter, kstring_t *str, int *dret) \
+	{ return ks_getuntil2(ks, delimiter, str, dret, 0); }
+#endif
 
 #ifndef KSTRING_T
 #define KSTRING_T kstring_t

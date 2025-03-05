@@ -73,6 +73,28 @@ typedef struct {
 
 #define KSORT_SWAP(type_t, a, b) { register type_t t=(a); (a)=(b); (b)=t; }
 
+#if (__STDC_VERSION__ >= 199901L) 
+#define KINSERTSORT_INIT(name,type_t, __sort_lt) \
+static inline void __ks_insertsort_##name(type_t *s, type_t *t)			\
+	{																	\
+		type_t *i, *j, swap_tmp;										\
+		for (i = s + 1; i < t; ++i)										\
+			for (j = i; j > s && __sort_lt(*j, *(j-1)); --j) {			\
+				swap_tmp = *j; *j = *(j-1); *(j-1) = swap_tmp;			\
+			}															\
+	}
+#else
+#define KINSERTSORT_INIT(name,type_t, __sort_lt) \
+static void __ks_insertsort_##name(type_t *s, type_t *t)				\
+	{																	\
+		type_t *i, *j, swap_tmp;										\
+		for (i = s + 1; i < t; ++i)										\
+			for (j = i; j > s && __sort_lt(*j, *(j-1)); --j) {			\
+				swap_tmp = *j; *j = *(j-1); *(j-1) = swap_tmp;			\
+			}															\
+	}
+#endif
+
 #define KSORT_INIT(name, type_t, __sort_lt)								\
 	void ks_mergesort_##name(size_t n, type_t array[], type_t temp[])	\
 	{																	\
@@ -147,14 +169,7 @@ typedef struct {
 			tmp = *l; *l = l[i]; l[i] = tmp; ks_heapadjust_##name(0, i, l); \
 		}																\
 	}																	\
-	static inline void __ks_insertsort_##name(type_t *s, type_t *t)			\
-	{																	\
-		type_t *i, *j, swap_tmp;										\
-		for (i = s + 1; i < t; ++i)										\
-			for (j = i; j > s && __sort_lt(*j, *(j-1)); --j) {			\
-				swap_tmp = *j; *j = *(j-1); *(j-1) = swap_tmp;			\
-			}															\
-	}																	\
+	KINSERTSORT_INIT(name, type_t, __sort_lt)							\
 	void ks_combsort_##name(size_t n, type_t a[])						\
 	{																	\
 		const double shrink_factor = 1.2473309501039786540366528676643; \

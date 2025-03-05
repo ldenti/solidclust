@@ -1,5 +1,4 @@
-CC=gcc
-CFLAGS=-g -O3 -Wall
+CFLAGS=-std=c89 -Wall -g # -O3
 LDFLAGS=-lm -lz
 
 .PHONY: all clean
