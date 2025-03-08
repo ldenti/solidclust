@@ -1,3 +1,5 @@
+#include <stdlib.h>
+#include <assert.h>
 #include "kmer.h"
 
 #if (__STDC_VERSION__ >= 199901L)
@@ -8,20 +10,26 @@ uint8_t reverse_char(const uint8_t c) {
 }
 
 void d23(const uint64_t kmer, int k, char *kk) {
-    for (int i = 1; i <= k; ++i) kk[i - 1] = ((kmer >> (k - i) * 2) & 3) + 1;
+    int i;
+    assert(kk);
+    for (i = 1; i <= k; ++i) kk[i - 1] = ((kmer >> (k - i) * 2) & 3) + 1;
     kk[k] = '\0';
 }
 
 void d2s(const uint64_t kmer, int k, char *kk) {
-    for (int i = 1; i <= k; ++i) kk[i - 1] = "ACGT"[(kmer >> (k - i) * 2) & 3];
+    int i;
+    assert(kk);
+    for (i = 1; i <= k; ++i) kk[i - 1] = "ACGT"[(kmer >> (k - i) * 2) & 3];
     kk[k] = '\0';
 }
 
 uint64_t k2d(const char *kmer, uint8_t k) {
     uint64_t kmer_d = 0;
     uint8_t x;
-    for (uint8_t i = 0; i < k; ++i) {
-        x = (kmer[i] < 6 ? kmer[i] : to_int[kmer[i]]);
+    uint8_t i;
+    assert(kmer);
+    for (i = 0; i < k; ++i) {
+        x = (kmer[i] < 6 ? kmer[i] : to_int[(int)kmer[i]]);
         kmer_d = (kmer_d << 2) | (x < 4 ? x : rand() % 4);
     }
     return kmer_d;
@@ -29,8 +37,9 @@ uint64_t k2d(const char *kmer, uint8_t k) {
 
 uint64_t rc(uint64_t kmer, const uint8_t k) {
     uint64_t rckmer = 0;
+    uint8_t i;
     kmer = ~kmer;
-    for (uint8_t i = 0; i < k; ++i) {
+    for (i = 0; i < k; ++i) {
         rckmer = (rckmer << 2) | (kmer & 3);
         kmer >>= 2;
     }

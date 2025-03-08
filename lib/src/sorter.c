@@ -1,4 +1,4 @@
-#include "rsort.h"
+#include "sorter.h"
 
 void rs_insertsort(rstype_t *beg, rstype_t *end) {
   rstype_t *i;
@@ -11,38 +11,38 @@ void rs_insertsort(rstype_t *beg, rstype_t *end) {
     }
 }
 
-// sort between [$beg, $end); take radix from ">>$s&((1<<$n_bits)-1)"
+/* sort between [$beg, $end); take radix from ">>$s&((1<<$n_bits)-1)" */
 void rs_sort(rstype_t *beg, rstype_t *end, int n_bits, int s) {
   rstype_t *i;
   int size = 1 << n_bits, m = size - 1;
-  rsbucket_t *k, b[size], *be = b + size; // b[] keeps all the buckets
+  rsbucket_t *k, b[size], *be = b + size; /* b[] keeps all the buckets */
 
   for (k = b; k != be; ++k)
     k->b = k->e = beg;
   for (i = beg; i != end; ++i)
-    ++b[rskey(*i) >> s & m].e;  // count radix
-  for (k = b + 1; k != be; ++k) // set start and end of each bucket
+    ++b[rskey(*i) >> s & m].e;  /* count radix */
+  for (k = b + 1; k != be; ++k) /* set start and end of each bucket */
     k->e += (k - 1)->e - beg, k->b = (k - 1)->e;
-  for (k = b; k != be;) { // in-place classification based on radix
-    if (k->b != k->e) {   // the bucket is not full
+  for (k = b; k != be;) { /* in-place classification based on radix */
+    if (k->b != k->e) {   /* the bucket is not full */
       rsbucket_t *l;
-      if ((l = b + (rskey(*k->b) >> s & m)) != k) { // different bucket
+      if ((l = b + (rskey(*k->b) >> s & m)) != k) { /* different bucket */
         rstype_t tmp = *k->b, swap;
-        do { // swap until we find an element in bucket $k
+        do { /* swap until we find an element in bucket $k */
           swap = tmp;
           tmp = *l->b;
           *l->b++ = swap;
           l = b + (rskey(tmp) >> s & m);
         } while (l != k);
-        *k->b++ = tmp; // push the found element to $k
+        *k->b++ = tmp; /* push the found element to $k */
       } else
-        ++k->b; // move to the next element in the bucket
+        ++k->b; /* move to the next element in the bucket */
     } else
-      ++k; // move to the next bucket
+      ++k; /* move to the next bucket */
   }
   for (b->b = beg, k = b + 1; k != be; ++k)
-    k->b = (k - 1)->e; // reset k->b
-  if (s) {             // if $s is non-zero, we need to sort buckets
+    k->b = (k - 1)->e; /* reset k->b */
+  if (s) {             /* if $s is non-zero, we need to sort buckets */
     s = s > n_bits ? s - n_bits : 0;
     for (k = b; k != be; ++k)
       if (k->e - k->b > RS_MIN_SIZE)

@@ -361,12 +361,13 @@ void rle_merge(rle_t *r1, rle_t *r2, int m) {
     rle_destroy(rr);
 }
 
-int main(int argc, char *argv[]) {
+int old_main(int argc, char **argv) {
     int i, r, c;
-    char *fq_fn = argv[1];
+    char *fastq_file;
     int w = 21, m = 15; /* atoi(argv[2]); */
 
-    gzFile fp = gzopen(fq_fn, "r");
+    fastq_file = argv[1];
+    gzFile fp = gzopen(fastq_file, "r");
     kseq_t *seq = kseq_init(fp);
     int l = 0;
 
@@ -379,6 +380,8 @@ int main(int argc, char *argv[]) {
     int mpr_n = 0;
 
     FILE *ofp = fopen("reads.XXX", "wb");
+
+    
     fwrite("IOR|", 1, 4, ofp);
 
     while ((l = kseq_read(seq)) >= 0) {
@@ -599,7 +602,7 @@ int main(int argc, char *argv[]) {
             clusters[i] = fopen(fn, "w");
         }
 
-        fp = gzopen(fq_fn, "r");
+        fp = gzopen(fastq_file, "r");
         seq = kseq_init(fp);
         l = 0;
         FILE *f;

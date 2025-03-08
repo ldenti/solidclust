@@ -18,14 +18,9 @@ typedef struct {
 #define RS_MIN_SIZE 64 /* for an array smaller than this, use insertion sort */
 
 typedef struct {
-  rstype_t *b, *e; /* begin and end of each bucket */
+  rstype_t *b;
+  rstype_t *e; /* begin and end of each bucket */
 } rsbucket_t;
-
-/* Insertion sort */
-void rs_insertsort(rstype_t *beg, rstype_t *end);
-
-/* Sort between [$beg, $end); take radix from ">>$s&((1<<$n_bits)-1)" */
-void rs_sort(rstype_t *beg, rstype_t *end, int n_bits, int s);
 
 void radix_sort(rstype_t *beg, rstype_t *end);
 
