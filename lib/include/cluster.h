@@ -5,7 +5,7 @@
 #include "ioc_types.h"
 #include "minimizer.h"
 
-typedef kvec_t(id_t) idv_t;
+typedef kvec_t(read_id_t) idv_t;
 
 typedef struct {
     idv_t ids;
@@ -19,6 +19,10 @@ int cluster_reads(
     const double merge_threhsold,
     clusters_t* clusters
 );
-int cluster_save(char const *const output_filename);
+
+int cluster_save(
+    clusters_t const *const clusters, 
+    char const *const output_folder
+);
 
 #endif /* CLUSTER_H */

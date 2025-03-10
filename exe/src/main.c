@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
     if (!err) err = parse_options(argc, argv, &opts);
     if (!err) err = sketch_reads_from_fastq(opts.input_fastq, opts.k, opts.w, opts.canonical, opts.seed, opts.quality_threshold, opts.tmp_filename);
     if (!err) err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, opts.post_cluster, &clusters);
-    if (!err) err = cluster_save(opts.output_dir);
+    if (!err) err = cluster_save(&clusters, opts.output_dir);
     destroy_options(&opts);
     return err;
 }
@@ -169,7 +169,20 @@ int generate_tmp_filename(char *const buffer, size_t buffer_len) {
 }
 
 int print_usage(FILE *ostrm) {
-    fprintf(ostrm, "TODO\n");
+    fprintf(ostrm, "isONClust3, rewritten in C\n");
+    fprintf(ostrm, "Options:\n");
+    fprintf(ostrm, "\t-i : Fastq file in input\n");
+    fprintf(ostrm, "\t-o : output folder where to store the TSV file(cluster_ids.tsv) and reads (cluster_reads.fasta)\n");
+    fprintf(ostrm, "\t-d : temporary filename [random name]\n");
+    fprintf(ostrm, "\t-m : preset mode [ont, pacbio]. This option sets k, w, q, t and post-cluster with default values, if not explicitly defined\n");
+    fprintf(ostrm, "\t-k : k-mer length [14]\n");
+    fprintf(ostrm, "\t-w : window length for computing minimizers (in number of bases > k) [30]\n");
+    fprintf(ostrm, "\t-q : quality threshold [0.97]\n");
+    fprintf(ostrm, "\t-t : similarity threshold for clustering [0.5]\n");
+    fprintf(ostrm, "\t-c : disable canonical minimizers [enabled]\n");
+    fprintf(ostrm, "\t--post-cluster : threshold used for merging clusters together [no merging]\n");
+    fprintf(ostrm, "\t-s : random seed [42]\n");
+    fprintf(ostrm, "\t-h : print this help\n");
     return OK;
 }
 

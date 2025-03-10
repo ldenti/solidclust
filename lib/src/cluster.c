@@ -136,7 +136,7 @@ int cluster_reads(
         kv_reserve(mm_t, kv_A(*clusters, 0).minimizers, len_id->size);
         if (!err && memcpy(&kv_A(*clusters, 0).minimizers, mm, len_id->size * sizeof(mm_t)) != &kv_A(*clusters, 0).minimizers) err = ERR_RUNTIME;
         if (!err) kv_A(*clusters, 0).minimizers.n = len_id->size;
-        if (!err) kv_push(id_t, kv_A(*clusters, 0).ids, len_id->id);
+        if (!err) kv_push(read_id_t, kv_A(*clusters, 0).ids, len_id->id);
         mm += len_id->size;
         ++len_id;
     }
@@ -151,14 +151,14 @@ int cluster_reads(
         }
         if (best_cluster_idx != SIZE_MAX) { /* merge read and cluster */
             if (!err) err = two_way_merge(mm, len_id->size, &buffer, &kv_A(*clusters, best_cluster_idx));
-            if (!err) kv_push(id_t, kv_A(*clusters, best_cluster_idx).ids, len_id->id);
+            if (!err) kv_push(read_id_t, kv_A(*clusters, best_cluster_idx).ids, len_id->id);
         } else { /* append read as new cluster */
             size_t back_idx = kv_size(*clusters) - 1;
             kv_push(cluster_t, *clusters, empty_cluster);
             kv_reserve(mm_t, kv_A(*clusters, back_idx).minimizers, len_id->size);
             if (!err && memcpy(&kv_A(*clusters, back_idx).minimizers.a, mm, len_id->size * sizeof(mm_t)) != &kv_A(*clusters, 0).minimizers) err = ERR_RUNTIME;
             if (!err) kv_A(*clusters, back_idx).minimizers.n = len_id->size;
-            if (!err) kv_push(id_t, kv_A(*clusters, back_idx).ids, len_id->id);
+            if (!err) kv_push(read_id_t, kv_A(*clusters, back_idx).ids, len_id->id);
         }
         mm += len_id->size;
         ++len_id;
@@ -193,7 +193,7 @@ int cluster_reads(
                     len_t big_size, small_size;
                     big_size = kv_A(*clusters, best_big_cluster_idx).ids.n;
                     small_size = kv_A(*clusters, best_cluster_idx).ids.n;
-                    kv_reserve(id_t, kv_A(*clusters, best_big_cluster_idx).ids, big_size + small_size);
+                    kv_reserve(read_id_t, kv_A(*clusters, best_big_cluster_idx).ids, big_size + small_size);
                     memcpy(kv_A(*clusters, best_big_cluster_idx).ids.a + big_size, kv_A(*clusters, best_cluster_idx).ids.a, small_size * sizeof(id_t));
                     kv_A(*clusters, best_big_cluster_idx).ids.n = big_size + small_size;
                     done[best_cluster_idx] = TRUE;
@@ -224,9 +224,36 @@ int cluster_reads(
     return err;
 }
 
-int cluster_save(char const *const output_filename) {
+int cluster_save(
+    clusters_t const *const clusters, 
+    char const *const output_folder
+) {
+    typedef kvec_t(char) string_t;
     int err;
-    assert(output_filename);
+    FILE *tab_output;
+    size_t i, j, of_len;
+    string_t filename;
+    assert(clusters);
+    assert(output_folder);
     err = OK;
+    kv_init(filename);
+    of_len = strlen(output_folder);
+    i = of_len - 1;
+    while (i < of_len && output_folder[i] == '/') { --of_len; }
+    kv_reserve(char, filename, of_len + 17);
+    if (!err && !filename.a) err = ERR_MALLOC;
+    if (!err && memcpy(filename.a, output_folder, of_len) != filename.a) err = ERR_RUNTIME;
+    memcpy(filename.a + of_len, "/cluster_ids.tsv", 17);
+    if (!err && (tab_output = fopen(filename.a, "w")) == NULL) err = ERR_FILE;
+    for (i = 0; i < clusters->n; ++i) {
+        for (j = 0; j < clusters->a[i].ids.n; ++j) {
+            fprintf(tab_output, "%llu\t%lu\n", clusters->a[i].ids.a[j], i); /* see scripts/cluster_fastq.py for creating the fastq files */
+        }
+    }
+    if (tab_output) {
+        fflush(tab_output);
+        fclose(tab_output);
+    }
+    kv_destroy(filename);
     return err;
 }
