@@ -60,10 +60,10 @@ int main() {
 #define kv_size(v) ((v).n)
 #define kv_max(v) ((v).m)
 
-#define kv_resize(type, v, s)  ((v).m = (s), (v).a = (type*)realloc((v).a, sizeof(type) * (v).m))
+#define kv_reserve(type, v, s)  ((v).m = (s), (v).a = (type*)realloc((v).a, sizeof(type) * (v).m))
 
 #define kv_copy(type, v1, v0) do {							\
-		if ((v1).m < (v0).n) kv_resize(type, v1, (v0).n);	\
+		if ((v1).m < (v0).n) kv_reserve(type, v1, (v0).n);	\
 		(v1).n = (v0).n;									\
 		memcpy((v1).a, (v0).a, sizeof(type) * (v0).n);		\
 	} while (0)												\

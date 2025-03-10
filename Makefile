@@ -1,7 +1,7 @@
 CPU_CC        := $(CC)
 CPU_OPTS      := --std=c89 -Wall -Werror -g #-O3
 CPU_MODULES   := exe lib bundled/klib bundled/xxhash bundled/xoshiro
-CPU_LIBS	  := -lm -lz -lpthread
+CPU_LIBS	  := -lm -lz # -lpthread
 CPU_BUILD_DIR := build
 CPU_OBJ_DIR   := $(CPU_BUILD_DIR)/objs
 CPU_SRC_DIR   := $(foreach item,$(CPU_MODULES),$(item)/src)

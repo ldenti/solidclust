@@ -3,6 +3,12 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "ioc_types.h"
+
+typedef struct {
+    read_id_t id;
+    len_t size;
+} sketch_metadata_t;
 
 int sketch_reads_from_fastq(
     char const *const input_fastq, 

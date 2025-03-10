@@ -7,18 +7,18 @@
 #include "../include/exception.h"
 #include "../include/sketch_reads.h"
 #include "../include/minimizer.h"
+#include "../include/ioc_types.h"
 
 KSEQ_INIT(gzFile, gzread)
 
 typedef struct {
-    size_t sketch_size;
-    size_t read_id;
+    sketch_metadata_t metadata;
     mm_t *sketch;
 } size_id_handle;
 typedef kvec_t(size_id_handle) lv_t;
 
-#define SSIZE(handle) ((handle).sketch_size)
-KRADIX_SORT_INIT(sketch_size, size_id_handle, SSIZE, sizeof(size_t))
+#define SSIZE(handle) ((handle).metadata.size)
+KRADIX_SORT_INIT(sketch_size, size_id_handle, SSIZE, sizeof(len_t))
 
 #define cmp(x, y) (x < y)
 KSORT_INIT(minimizer, mm_t, cmp)
@@ -80,8 +80,8 @@ int sketch_reads_from_fastq(
         if (!err) err = make_qual_filter(seq->qual.s, seq->qual.l, k, quality_threshold, &quality_filter);
         if (!err) err = minimizer_from_string(seq->seq.s, quality_filter.a, seq->seq.l, k, w, canonical, seed, &minimizer_count, &mmzers); /* this appends new minimizers to end of mmzers */
         ks_introsort(minimizer, minimizer_count, mmzers.a + cumulative_count);
-        handle.read_id = read_id;
-        handle.sketch_size = minimizer_count;
+        handle.metadata.id = read_id;
+        handle.metadata.size = minimizer_count;
         handle.sketch = mmzers.a + cumulative_count;
         kv_push(size_id_handle, lengths, handle);
         cumulative_count += minimizer_count;
@@ -93,7 +93,7 @@ int sketch_reads_from_fastq(
     radix_sort_sketch_size(lengths.a, lengths.a + lengths.n); /* sort by decreasing length sizes */
 #ifndef NDEBUG
     if (lengths.n > 0) for (i = 0; !err && i < lengths.n - 1; ++i) { /* check radix sort output */
-        if (kv_A(lengths, i).sketch_size < kv_A(lengths, i + 1).sketch_size) {
+        if (kv_A(lengths, i).metadata.size < kv_A(lengths, i + 1).metadata.size) {
             fprintf(stderr, "[sketch_reads] lengths are not stored in decreasing order\n");
             err = ERR_LOGIC;
         }
@@ -105,12 +105,12 @@ int sketch_reads_from_fastq(
     if (!err && fwrite(&cumulative_count, sizeof(cumulative_count), 1, oh) != 1) err = ERR_IO;
     cumulative_count = 0;
     for (i = 0; i < lengths.n; ++i) { /* write cumulative lengths */
-        cumulative_count += kv_A(lengths, i).sketch_size;
-        if (fwrite(&cumulative_count, sizeof(cumulative_count), 1, oh) != 1) err = ERR_IO;
+        /* cumulative_count += kv_A(lengths, i).sketch_size; */
+        if (fwrite(&kv_A(lengths, i).metadata, sizeof(sketch_metadata_t), 1, oh) != 1) err = ERR_IO;
     }
     for (i = 0; i < lengths.n; ++i) { /* write sketches in the order given by lengths (from longest to shortest) */
-        size_id_handle *record = &kv_A(lengths, i);
-        if (fwrite(record->sketch, sizeof(mm_t), record->sketch_size, oh) != record->sketch_size) err = ERR_IO;
+        size_id_handle *record = &kv_A(lengths, i); /* DO NOT merge the two for loops since actual sketches come after their lengths */
+        if (fwrite(record->sketch, sizeof(mm_t), record->metadata.size, oh) != record->metadata.size) err = ERR_IO;
     }
     fflush(oh);
     fclose(oh);

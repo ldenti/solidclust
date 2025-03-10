@@ -36,6 +36,10 @@
 
 # IDEs
 .vscode/
+*~
 
 # executable
 build/
+
+# others
+unused/

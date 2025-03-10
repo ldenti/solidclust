@@ -17,11 +17,13 @@ int generate_tmp_filename(char *const buffer, size_t buffer_len);
 int main(int argc, char **argv) {
     int err;
     option_t opts;
+    clusters_t clusters;
     err = OK;
     init_options(&opts);
+    kv_init(clusters);
     if (!err) err = parse_options(argc, argv, &opts);
-    if (!err) err = sketch_reads_from_fastq(opts.input_fastq, opts.k, opts.w, opts.canonical, opts.seed, opts.threshold, opts.tmp_filename);
-    if (!err) err = cluster_reads(opts.tmp_filename);
+    if (!err) err = sketch_reads_from_fastq(opts.input_fastq, opts.k, opts.w, opts.canonical, opts.seed, opts.quality_threshold, opts.tmp_filename);
+    if (!err) err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, opts.post_cluster, &clusters);
     if (!err) err = cluster_save(opts.output_dir);
     destroy_options(&opts);
     return err;
@@ -32,13 +34,17 @@ int parse_options(int argc, char **argv, option_t *const opts) {
 		{ "foo", ko_no_argument,       301 },
 		{ "bar", ko_required_argument, 302 },
 		{ "opt", ko_optional_argument, 303 }, */
+        {"post-cluster", ko_required_argument, 301},
 		{ NULL, 0, 0 }
 	};
-    static char const* const shortopts = "i:o:m:k:w:s:d:ch";
+    static char const* const shortopts = "i:o:m:k:w:s:d:q:t:ch";
     int c;
     unsigned long buffer;
     unsigned char k_explicit;
     unsigned char w_explicit;
+    unsigned char t1_explicit;
+    unsigned char t2_explicit;
+    unsigned char post_explicit;
     ketopt_t opt;
     
     assert(argv);
@@ -47,6 +53,9 @@ int parse_options(int argc, char **argv, option_t *const opts) {
     opt = KETOPT_INIT;
     k_explicit = FALSE;
     w_explicit = FALSE;
+    t1_explicit = FALSE;
+    t2_explicit = FALSE;
+    post_explicit = FALSE;
     while((c = ketopt(&opt, argc, argv, 1, shortopts, longopts)) >= 0) {
         switch (c)
         {
@@ -56,9 +65,15 @@ int parse_options(int argc, char **argv, option_t *const opts) {
                 if (strcmp(opt.arg, "ont") == 0) {
                     if (!k_explicit) opts->k = 13;
                     if (!w_explicit) opts->w = 21;
+                    if (!t1_explicit) opts->quality_threshold = 0.95;
+                    if (!t2_explicit) opts->similarity_threshold = 0.5;
+                    if (!post_explicit) opts->post_cluster = 0.5;
                 } else if (strcmp(opt.arg, "pacbio") == 0) {
                     if (!k_explicit) opts->k = 15;
                     if (!w_explicit) opts->w = 51;
+                    if (!t1_explicit) opts->quality_threshold = 0.98;
+                    if (!t2_explicit) opts->similarity_threshold = 0.5;
+                    if (!post_explicit) opts->post_cluster = 0.8;
                 } else {
                     fprintf(stderr, "Invalid mode, available options are [ont, pacbio]\n");
                     return ERR_PARSE;
@@ -82,6 +97,20 @@ int parse_options(int argc, char **argv, option_t *const opts) {
                 opts->w = (uint8_t)buffer;
                 w_explicit = TRUE;
                 break;
+            case 'q':
+                opts->quality_threshold = strtod(opt.arg, NULL);
+                if (opts->quality_threshold < 0 || opts->quality_threshold > 1) {
+                    fprintf(stderr, "quality threshold must be in [0, 1]");
+                    return ERR_PARSE;
+                }
+                break;
+            case 't':
+                opts->similarity_threshold = strtod(opt.arg, NULL);
+                if (opts->similarity_threshold < 0 || opts->similarity_threshold > 1) {
+                    fprintf(stderr, "similarity threshold for clustering must be in [0, 1]");
+                    return ERR_PARSE;
+                }
+                break;
             case 'c':
                 opts->canonical = TRUE;
                 break;
@@ -90,6 +119,10 @@ int parse_options(int argc, char **argv, option_t *const opts) {
                 break;
             case 'd':
                 opts->tmp_filename = opt.arg;
+                break;
+            case 301:
+                opts->post_cluster = strtod(opt.arg, NULL);
+                post_explicit = TRUE;
                 break;
             case 'h':
                 print_usage(stdout);
@@ -112,6 +145,12 @@ int parse_options(int argc, char **argv, option_t *const opts) {
         if (!(opts->tmp_filename = malloc(TMP_FILE_SIZE + 5))) return ERR_MALLOC;
         if (generate_tmp_filename(opts->tmp_filename, TMP_FILE_SIZE + 5)) return ERR_LOGIC;
         opts->tmp_filename_allocated = TRUE;
+    }
+    if (opts->w >= opts->k) {
+        opts->w = opts->w - opts->k + 1; /* convert w from number of bases to number of k-mers */
+    } else {
+        fprintf(stderr, "window size cannot be smaller than k\n");
+        return ERR_PARSE;
     }
     return OK;
 }

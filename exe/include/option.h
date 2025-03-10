@@ -10,7 +10,9 @@ typedef struct {
     unsigned char k;
     unsigned char w;
     unsigned char canonical;
-    double threshold;
+    double quality_threshold;
+    double similarity_threshold;
+    double post_cluster;
     unsigned long long seed;
     unsigned char tmp_filename_allocated;
 } option_t;

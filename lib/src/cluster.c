@@ -1,15 +1,226 @@
 
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 #include <assert.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include "../../bundled/klib/include/ksort.h"
 #include "../include/exception.h"
+#include "../include/minimizer.h"
+#include "../include/sketch_reads.h"
 #include "../include/cluster.h"
 
-int cluster_reads(char const *const index_filename) {
+#define cmp(x, y) ((x).minimizers.n > (y).minimizers.n)
+KSORT_INIT(cluster, cluster_t, cmp)
+
+double get_shared_count(mm_t const *const sketch, const size_t sketch_size, cluster_t const *const cluster) {
+    double shared;
+    size_t i, j;
+    assert(sketch);
+    assert(cluster);
+    shared = 0;
+    i = j = 0;
+    while (i < sketch_size && j < cluster->minimizers.n) {
+        mm_t smm, cmm;
+        smm = sketch[i];
+        cmm = kv_A(cluster->minimizers, j);
+        if (smm == cmm) { /* advance both */
+            shared += 1;
+            ++i;
+            ++j;
+        } else if (smm > cmm) {
+            ++j;
+        } else {
+            ++i;
+        }
+    }
+    return shared;
+}
+
+int two_way_merge(mm_t const *const sketch, const size_t sketch_size, mmv_t *const buffer, cluster_t* cluster) { 
     int err;
+    size_t i, j;
+    assert(sketch);
+    assert(buffer);
+    assert(cluster);
+    err = OK;
+    buffer->n = 0; /* clear buffer */
+    i = j = 0;
+    while (i < sketch_size && j < kv_size(cluster->minimizers)) {
+        mm_t smm, cmm;
+        smm = sketch[i];
+        cmm = kv_A(cluster->minimizers, j);
+        if (smm == cmm) {
+            kv_push(mm_t, *buffer, smm);
+            ++i;
+            ++j;
+        } else if (smm < cmm) {
+            kv_push(mm_t, *buffer, smm);
+            ++i;
+        } else {
+            kv_push(mm_t, *buffer, cmm);
+            ++j;
+        }
+    }
+    while (i < sketch_size) {
+        kv_push(mm_t, *buffer, sketch[i]);
+        ++i;
+    }
+    while (j < kv_size(cluster->minimizers)) {
+        kv_push(mm_t, *buffer, kv_A(cluster->minimizers, j));
+        ++j;
+    }
+    kv_reserve(mm_t, cluster->minimizers, kv_size(*buffer));
+    if(memcpy(cluster->minimizers.a, buffer->a, buffer->n * sizeof(mm_t)) != cluster->minimizers.a) err = ERR_RUNTIME;
+    if (!err) cluster->minimizers.n = buffer->n;
+    return err;
+}
+
+size_t seek_done(unsigned char const *const flags, const size_t size, const size_t start) {
+    size_t i;
+    assert(flags);
+    for (i = start; i < size && !flags[i]; ++i) {}
+    return i;
+}
+
+size_t seek_not_done(unsigned char const *const flags, const size_t size, const size_t rstart) {
+    size_t i;
+    assert(flags);
+    for (i = rstart; i != 0 && flags[i]; --i) {}
+    return i;
+}
+
+int cluster_reads(
+    char const *const index_filename, 
+    const double similarity_threshold, 
+    const double merge_threhsold,
+    clusters_t* clusters
+) {
+    int err, fd;
+    struct stat filestat;
+    void* index;
+    sketch_metadata_t* len_id;
+    mm_t* mm;
+    uint64_t nsketches;
+    cluster_t empty_cluster;
+    size_t i, j, best_cluster_idx, best_big_cluster_idx;
+    double best_similarity, similarity;
+    mmv_t buffer;
     assert(index_filename);
     err = OK;
+    kv_init(empty_cluster.minimizers);
+    kv_init(empty_cluster.ids);
+    kv_init(buffer);
     /* memory map index file */
+    if (!err && (fd = open(index_filename, O_RDWR)) < 0) {
+        fprintf(stderr, "opening temporary index file failed\n");
+        err = ERR_FILE;
+    }
+    if (!err && fstat(fd, &filestat) != 0) {
+        fprintf(stderr, "stat failed\n");
+        err = ERR_FILE;
+    }
+    if (!err && (index = mmap(NULL, filestat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED) err = ERR_FILE;
     /* keep 2 pointers: cumulative sum of lengths and current sketch */
-    /* implement isonclust3 algorithm */
+    if (!err) {
+        nsketches = *((uint64_t*)index);
+        len_id = (sketch_metadata_t*)(index + sizeof(uint64_t)); /* init iterator to start of metadata */
+        mm = (mm_t*)(index + nsketches * sizeof(sketch_metadata_t)); /* jump to start of sketches */
+        /* implement isonclust3 algorithm */
+        kv_init(*clusters);
+        kv_push(cluster_t, *clusters, empty_cluster);
+        kv_reserve(mm_t, kv_A(*clusters, 0).minimizers, len_id->size);
+        if (!err && memcpy(&kv_A(*clusters, 0).minimizers, mm, len_id->size * sizeof(mm_t)) != &kv_A(*clusters, 0).minimizers) err = ERR_RUNTIME;
+        if (!err) kv_A(*clusters, 0).minimizers.n = len_id->size;
+        if (!err) kv_push(id_t, kv_A(*clusters, 0).ids, len_id->id);
+        mm += len_id->size;
+        ++len_id;
+    }
+    for (i = 1; !err && i < nsketches; ++i) {
+        best_cluster_idx = SIZE_MAX;
+        best_similarity = similarity_threshold;
+        for (j = 0; j < kv_size(*clusters); ++j) {
+            if ((similarity = get_shared_count(mm, len_id->size, &kv_A(*clusters, j)) / len_id->size) > best_similarity) {
+                best_similarity = similarity;
+                best_cluster_idx = j;
+            }
+        }
+        if (best_cluster_idx != SIZE_MAX) { /* merge read and cluster */
+            if (!err) err = two_way_merge(mm, len_id->size, &buffer, &kv_A(*clusters, best_cluster_idx));
+            if (!err) kv_push(id_t, kv_A(*clusters, best_cluster_idx).ids, len_id->id);
+        } else { /* append read as new cluster */
+            size_t back_idx = kv_size(*clusters) - 1;
+            kv_push(cluster_t, *clusters, empty_cluster);
+            kv_reserve(mm_t, kv_A(*clusters, back_idx).minimizers, len_id->size);
+            if (!err && memcpy(&kv_A(*clusters, back_idx).minimizers.a, mm, len_id->size * sizeof(mm_t)) != &kv_A(*clusters, 0).minimizers) err = ERR_RUNTIME;
+            if (!err) kv_A(*clusters, back_idx).minimizers.n = len_id->size;
+            if (!err) kv_push(id_t, kv_A(*clusters, back_idx).ids, len_id->id);
+        }
+        mm += len_id->size;
+        ++len_id;
+    }
+    len_id = NULL;
+    mm = NULL;
+    kv_destroy(empty_cluster.minimizers);
+    kv_destroy(empty_cluster.ids);
+    if (!err && munmap(index, filestat.st_size) != 0) err = ERR_RUNTIME;
+    if (!err && close(fd)) return ERR_FILE;
+    if (!err && merge_threhsold != 0) {
+        unsigned char* done;
+        ks_mergesort_cluster(clusters->n, clusters->a, NULL);
+        done = NULL;
+        if (!err && (done = calloc(clusters->n, 1)) == NULL) err = ERR_MALLOC;
+        do {
+            best_similarity = merge_threhsold;
+            best_big_cluster_idx = best_cluster_idx = SIZE_MAX;
+            for (i = 0; i < kv_size(*clusters); ++i) {
+                cluster_t big_cluster = kv_A(*clusters, i);
+                for (j = i + 1; !done[j] && j < kv_size(*clusters); ++j) {
+                    cluster_t* small_cluster = &kv_A(*clusters, j);
+                    if (get_shared_count(big_cluster.minimizers.a, big_cluster.minimizers.n, small_cluster) / small_cluster->minimizers.n >= best_similarity) {
+                        best_cluster_idx = j;
+                        best_big_cluster_idx = i;
+                    }
+                }
+            }
+            if (best_cluster_idx != SIZE_MAX) { /* merge cluster at index j into cluster at index i */
+                if (!err) err = two_way_merge(kv_A(*clusters, j).minimizers.a, kv_A(*clusters, j).minimizers.n, &buffer, &kv_A(*clusters, i));
+                if (!err) { /* merge ids */
+                    len_t big_size, small_size;
+                    big_size = kv_A(*clusters, best_big_cluster_idx).ids.n;
+                    small_size = kv_A(*clusters, best_cluster_idx).ids.n;
+                    kv_reserve(id_t, kv_A(*clusters, best_big_cluster_idx).ids, big_size + small_size);
+                    memcpy(kv_A(*clusters, best_big_cluster_idx).ids.a + big_size, kv_A(*clusters, best_cluster_idx).ids.a, small_size * sizeof(id_t));
+                    kv_A(*clusters, best_big_cluster_idx).ids.n = big_size + small_size;
+                    done[best_cluster_idx] = TRUE;
+                }
+            }
+        } while (best_cluster_idx != SIZE_MAX);
+        assert(!done[0]); /* due to sorting the first cluster is the biggest and it is always active */
+        i = seek_done(done, clusters->n, 0);
+        j = seek_not_done(done, clusters->n, clusters->n - 1);
+        while(i < j) { /* swap to fill hole */
+            cluster_t tmp = clusters->a[i];
+            clusters->a[i] = clusters->a[j];
+            clusters->a[j] = tmp;
+            done[i] = FALSE;
+            done[j] = TRUE;
+            i = seek_done(done, j, i + 1);
+            j = seek_not_done(done, clusters->n, j - 1);
+        }
+        for (j = i; j < clusters->n; ++j) { /* deallocate merged clusters which are now the tail */
+            kv_destroy(kv_A(*clusters, j).minimizers);
+            kv_destroy(kv_A(*clusters, j).ids); 
+        }
+        clusters->n = i; /* resize vector with to true clusters */
+        if (done) free(done);
+    }
+    kv_destroy(buffer);
+    for (i = 0; i < kv_size(*clusters); ++i) kv_destroy(kv_A(*clusters, i).minimizers); /* deallocate all remaining minimizers */
     return err;
 }
 
