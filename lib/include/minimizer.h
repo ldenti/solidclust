@@ -16,7 +16,6 @@ int minimizer_from_string(
     const uint8_t w, 
     const unsigned char canonical, 
     const uint64_t seed, 
-    size_t *mm_count, 
     mmv_t *accumulator
 );
 

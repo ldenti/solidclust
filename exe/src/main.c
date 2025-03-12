@@ -35,7 +35,7 @@ int parse_options(int argc, char **argv, option_t *const opts) {
 		{ "bar", ko_required_argument, 302 },
 		{ "opt", ko_optional_argument, 303 }, */
         {"post-cluster", ko_required_argument, 301},
-		{ NULL, 0, 0 }
+		{NULL, 0, 0}
 	};
     static char const* const shortopts = "i:o:m:k:w:s:d:q:t:ch";
     int c;
@@ -57,8 +57,7 @@ int parse_options(int argc, char **argv, option_t *const opts) {
     t2_explicit = FALSE;
     post_explicit = FALSE;
     while((c = ketopt(&opt, argc, argv, 1, shortopts, longopts)) >= 0) {
-        switch (c)
-        {
+        switch (c) {
             case 'i': opts->input_fastq = opt.arg; break;
             case 'o': opts->output_dir = opt.arg; break;
             case 'm': 
@@ -128,7 +127,7 @@ int parse_options(int argc, char **argv, option_t *const opts) {
                 print_usage(stdout);
                 exit(EXIT_SUCCESS);
             default:
-                fprintf(stderr, "Unrecognized option\n");
+                fprintf(stderr, "Unrecognized option: %d -> %s\n", c, opt.arg);
                 print_usage(stderr);
                 return ERR_PARSE;
         }

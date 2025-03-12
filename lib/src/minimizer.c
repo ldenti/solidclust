@@ -41,7 +41,6 @@ int minimizer_from_string(
     const uint8_t w, 
     const unsigned char canonical, 
     const uint64_t seed, 
-    size_t *mm_count, 
     mmv_t *accumulator
 ) {
     int err, c;
@@ -54,10 +53,8 @@ int minimizer_from_string(
     mm_hash_t current;
     mm_hash_t *buffer;
     assert(seq);
-    assert(mm_count);
     assert(accumulator);
     err = OK;
-    *mm_count = 0;
     shift = 2 * (k - 1);
     mask = (1ULL << (2 * k)) - 1;
     km[0] = km[1] = 0;
@@ -78,7 +75,6 @@ int minimizer_from_string(
             if (nbases_since_last_break >= k) {
                 current.itself = km[z];
                 current.hash = XXH64(&km[z], sizeof(km[z]), seed);
-                ++(*mm_count);
                 if (nbases_since_last_break == k + 1) {
                     /* have seen the first window after a break, time to search for the minimum note that the current m-mer is checked by the next if */
                     min_pos = 0;
