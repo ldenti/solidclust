@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <assert.h>
 #include <math.h> 
 #include <zlib.h>
@@ -8,6 +7,10 @@
 #include "../include/sketch_reads.h"
 #include "../include/minimizer.h"
 #include "../include/ioc_types.h"
+
+#ifndef NDEBUG
+#include <stdio.h>
+#endif
 
 KSEQ_INIT(gzFile, gzread)
 
@@ -27,26 +30,40 @@ typedef kvec_t(unsigned char) qfilter_t;
 
 int make_qual_filter(char const *const qual, const size_t seq_len, const uint8_t k, const double threshold, qfilter_t *const filter) {
     int err;
-    size_t i, buf_idx;
-    double *buffer, q, kmer_quality;
+    size_t i;
+    double *buffer, kmer_quality;
     assert(qual);
     assert(filter);
     err = OK;
-    filter->n = 0; /* clean */
+    buffer = NULL;
+    if (!err && (buffer = malloc(seq_len * sizeof(double))) == NULL) err = ERR_MALLOC;
+    for (i = 0; i < seq_len; ++i) {
+        buffer[i] = 1.0 - pow(10.0, -((int)qual[i] - 33) / 10);
+    }
+    kv_reserve(unsigned char, *filter, seq_len);
+    for (filter->n = 0; filter->n < seq_len - k + 1; ++filter->n) {
+        kmer_quality = 1;
+        for (i = 0; i < k; ++i) {
+            kmer_quality *= qual[filter->n + i];
+        }
+        filter->a[i] = kmer_quality > threshold;
+    }
+    if (buffer) free(buffer);
+
+    /*
     kmer_quality = 1;
     buf_idx = 0;
     if (!(buffer = malloc(k * sizeof(double)))) err = ERR_MALLOC;
     if (!err) for (i = 0; i < k; ++i) buffer[i] = 1;
-    if (!err) for (i = 0; i < seq_len; ++i) { /* FIXME find a numerically stable algorithm, rn if kmer_quality goes to 0, then everything is 0 */
+    if (!err) for (i = 0; i < seq_len; ++i) { FIXME find a numerically stable algorithm, rn if kmer_quality goes to 0, then everything is 0 
         q = buffer[buf_idx];
         buffer[buf_idx] = 1.0 - pow(10.0, -((int)qual[i] - 33) / 10);
-        kmer_quality /= q; /* no need to check if i >= k since buffer is all 1s at the beginning */
+        kmer_quality /= q; no need to check if i >= k since buffer is all 1s at the beginning 
         kmer_quality *= buffer[buf_idx];
-        /* fprintf(stderr, "%d\n", kmer_quality); */
         if ((i + 1) >= k) kv_push(unsigned char, *filter, kmer_quality > threshold);
         buf_idx = (buf_idx + 1) % k;
     }
-    fprintf(stderr, "seq len = %llu, k = %llu, filter length = %llu\n", seq_len, k, filter->n);
+    */
     assert(seq_len < k || filter->n == seq_len - k + 1);
     return err;
 }
@@ -86,7 +103,6 @@ int sketch_reads_from_fastq(
         handle.metadata.id = read_id;
         handle.metadata.size = mmzers.n - cumulative_count;
         handle.sketch_offset = cumulative_count;
-        fprintf(stderr, "found %llu new minimzers from read %llu\n", handle.metadata.size, read_id);
         if (!err && handle.metadata.size > 0) ks_introsort(minimizer, handle.metadata.size, mmzers.a + cumulative_count);
         kv_push(size_id_handle, lengths, handle);
         cumulative_count = mmzers.n;
@@ -125,11 +141,3 @@ int sketch_reads_from_fastq(
     kv_destroy(mmzers);
     return err;
 }
-
-/*
-0, 4, 0x105101ea0 = 4379909792
-1, 3, 0x1050013c0 = 4378858432
-4, 0, 0x1050013d8
-3, 0, 0x1050013d8
-2, 0, 0x1050013d8
-*/

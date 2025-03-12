@@ -226,18 +226,21 @@ int cluster_reads(
     return err;
 }
 
+/*
+    FIXME: this function writes a csv file only mapping reads ids to clusters. 
+    Extend it to split the original Fastq into the actual clusters or write/re-use a separate tool for that.
+*/
 int cluster_save(
     clusters_t const *const clusters, 
-    char const *const output_folder
+    char const *const output_filename
 ) {
-    typedef kvec_t(char) string_t;
     int err;
-    FILE *tab_output;
-    size_t i, j, of_len;
-    string_t filename;
+    FILE *comma_output;
+    size_t i, j;
+    /* kvec_t(char) filename; */
     assert(clusters);
-    assert(output_folder);
     err = OK;
+    /* 
     kv_init(filename);
     of_len = strlen(output_folder);
     i = of_len - 1;
@@ -245,17 +248,26 @@ int cluster_save(
     kv_reserve(char, filename, of_len + 17);
     if (!err && !filename.a) err = ERR_MALLOC;
     if (!err && memcpy(filename.a, output_folder, of_len) != filename.a) err = ERR_RUNTIME;
-    memcpy(filename.a + of_len, "/cluster_ids.tsv", 17);
-    if (!err && (tab_output = fopen(filename.a, "w")) == NULL) err = ERR_FILE;
-    for (i = 0; i < clusters->n; ++i) {
-        for (j = 0; j < clusters->a[i].ids.n; ++j) {
-            fprintf(tab_output, "%llu\t%lu\n", clusters->a[i].ids.a[j], i); /* see scripts/cluster_fastq.py for creating the fastq files */
+    if (!err && memcpy(filename.a + of_len, "/cluster_ids.csv", 17) != filename.a + of_len) err = ERR_RUNTIME;
+    if (!err && (comma_output = fopen(filename.a, "w")) == NULL) err = ERR_FILE;
+    */
+    if (output_filename) {
+        if ((comma_output = fopen(output_filename, "w")) == NULL) err = ERR_FILE;
+    } else {
+        comma_output = stdout;
+    } 
+    if (!err) {
+        fprintf(comma_output, "read ID,cluster ID\n");
+        for (i = 0; i < clusters->n; ++i) {
+            for (j = 0; j < clusters->a[i].ids.n; ++j) {
+                fprintf(comma_output, "%llu,%lu\n", clusters->a[i].ids.a[j], i);
+            }
         }
     }
-    if (tab_output) {
-        fflush(tab_output);
-        fclose(tab_output);
+    if (comma_output) {
+        fflush(comma_output);
+        if (comma_output != stdout) fclose(comma_output);
     }
-    kv_destroy(filename);
+    /* kv_destroy(filename); */
     return err;
 }
