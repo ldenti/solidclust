@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
     if (!err) err = parse_options(argc, argv, &opts);
     if (!err) err = sketch_reads_from_fastq(opts.input_fastq, opts.k, opts.w, opts.canonical, opts.seed, opts.quality_threshold, opts.tmp_filename);
     if (!err) err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, opts.post_cluster, &clusters);
-    if (!err) err = cluster_save(&clusters, opts.output_dir);
+    if (!err) err = cluster_save(&clusters, opts.output_mapping);
     destroy_options(&opts);
     return err;
 }
@@ -59,7 +59,7 @@ int parse_options(int argc, char **argv, option_t *const opts) {
     while((c = ketopt(&opt, argc, argv, 1, shortopts, longopts)) >= 0) {
         switch (c) {
             case 'i': opts->input_fastq = opt.arg; break;
-            case 'o': opts->output_dir = opt.arg; break;
+            case 'o': opts->output_mapping = opt.arg; break;
             case 'm': 
                 if (strcmp(opt.arg, "ont") == 0) {
                     if (!k_explicit) opts->k = 13;
@@ -136,10 +136,6 @@ int parse_options(int argc, char **argv, option_t *const opts) {
         fprintf(stderr, "Input fastq is required\n");
         return ERR_PARSE;
     }
-    if (!opts->output_dir) {
-        fprintf(stderr, "Output folder is required\n");
-        return ERR_PARSE;
-    }
     if (!opts->tmp_filename) {
         if (!(opts->tmp_filename = malloc(TMP_FILE_SIZE + 5))) return ERR_MALLOC;
         if (generate_tmp_filename(opts->tmp_filename, TMP_FILE_SIZE + 5)) return ERR_LOGIC;
@@ -171,7 +167,7 @@ int print_usage(FILE *ostrm) {
     fprintf(ostrm, "isONClust3, rewritten in C\n");
     fprintf(ostrm, "Options:\n");
     fprintf(ostrm, "\t-i : Fastq file in input\n");
-    fprintf(ostrm, "\t-o : output folder where to store the TSV file(cluster_ids.tsv) and reads (cluster_reads.fasta)\n");
+    fprintf(ostrm, "\t-o : output CSV file mapping reads to clusters (by index)\n");
     fprintf(ostrm, "\t-d : temporary filename [random name]\n");
     fprintf(ostrm, "\t-m : preset mode [ont, pacbio]. This option sets k, w, q, t and post-cluster with default values, if not explicitly defined\n");
     fprintf(ostrm, "\t-k : k-mer length [14]\n");

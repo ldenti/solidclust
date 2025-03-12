@@ -5,7 +5,7 @@
 
 typedef struct {
     char *input_fastq;
-    char *output_dir;
+    char *output_mapping;
     char *tmp_filename;
     unsigned char k;
     unsigned char w;

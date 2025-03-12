@@ -6,7 +6,7 @@
 void init_options(option_t *const opts) {
     assert(opts);
     opts->input_fastq = NULL;
-    opts->output_dir = NULL;
+    opts->output_mapping = NULL;
     opts->tmp_filename = NULL;
     opts->k = 14;
     opts->w = 30;
