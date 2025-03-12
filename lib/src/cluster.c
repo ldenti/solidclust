@@ -135,17 +135,13 @@ int cluster_reads(
         kv_init(*clusters);
         kv_push(cluster_t, *clusters, empty_cluster);
         kv_reserve(mm_t, kv_A(*clusters, 0).minimizers, len_id->size);
-        assert(clusters->a[0].minimizers.a);
         if (!err && memcpy(kv_A(*clusters, 0).minimizers.a, mm, len_id->size * sizeof(mm_t)) != kv_A(*clusters, 0).minimizers.a) err = ERR_RUNTIME;
-        assert(clusters->a[0].minimizers.a);
         if (!err) kv_A(*clusters, 0).minimizers.n = len_id->size;
         if (!err) kv_push(read_id_t, kv_A(*clusters, 0).ids, len_id->id);
         mm += len_id->size;
         ++len_id;
     }
-    if (!err) fprintf(stderr, "nsketches = %llu\n", nsketches);
     for (i = 1; !err && i < nsketches; ++i) {
-        fprintf(stderr, "sketch size = %llu\n", len_id->size);
         best_cluster_idx = SIZE_MAX;
         best_similarity = similarity_threshold;
         for (j = 0; j < kv_size(*clusters); ++j) {
@@ -161,7 +157,8 @@ int cluster_reads(
             kv_push(cluster_t, *clusters, empty_cluster);
             size_t back_idx = kv_size(*clusters) - 1;
             kv_reserve(mm_t, kv_A(*clusters, back_idx).minimizers, len_id->size);
-            if (!err && memcpy(&kv_A(*clusters, back_idx).minimizers.a, mm, len_id->size * sizeof(mm_t)) != &kv_A(*clusters, 0).minimizers.a) err = ERR_RUNTIME;
+            assert(clusters->a[back_idx].minimizers.a);
+            if (!err && memcpy(kv_A(*clusters, back_idx).minimizers.a, mm, len_id->size * sizeof(mm_t)) != kv_A(*clusters, back_idx).minimizers.a) err = ERR_RUNTIME;
             if (!err) kv_A(*clusters, back_idx).minimizers.n = len_id->size;
             if (!err) kv_push(read_id_t, kv_A(*clusters, back_idx).ids, len_id->id);
         }
@@ -184,7 +181,7 @@ int cluster_reads(
             best_big_cluster_idx = best_cluster_idx = SIZE_MAX;
             for (i = 0; i < kv_size(*clusters); ++i) {
                 cluster_t big_cluster = kv_A(*clusters, i);
-                for (j = i + 1; !done[j] && j < kv_size(*clusters); ++j) {
+                for (j = i + 1; j < kv_size(*clusters) && !done[j]; ++j) {
                     cluster_t* small_cluster = &kv_A(*clusters, j);
                     if (get_shared_count(big_cluster.minimizers.a, big_cluster.minimizers.n, small_cluster) / small_cluster->minimizers.n >= best_similarity) {
                         best_cluster_idx = j;
