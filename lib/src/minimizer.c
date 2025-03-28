@@ -75,12 +75,12 @@ int minimizer_from_string(
             if (nbases_since_last_break >= k) {
                 current.itself = km[z];
                 current.hash = XXH64(&km[z], sizeof(km[z]), seed);
-                if (nbases_since_last_break == k + 1) {
-                    /* have seen the first window after a break, time to search for the minimum note that the current m-mer is checked by the next if */
+                if (nbases_since_last_break == k + w - 1) {
+                    /* have seen the first window after a break, time to search for the minimum. note that the current k-mer is checked by the next if */
                     min_pos = 0;
                     for (j = 0; j < w; ++j) if (buffer[j].hash < buffer[min_pos].hash) min_pos = j;
                 }
-                if (nbases_since_last_break >= k + 1) {  /* time to update the minimum, if necessary */
+                if (nbases_since_last_break >= k + w) {  /* time to update the minimum, if necessary */
                     if (buf_pos % w == min_pos) {  /* old minimum outside window */
                         append_to_accumulator(&buffer[min_pos], i, filter, accumulator);  /* we save the old minimum, length on the right is k by definition */
                         find_brand_new_min = TRUE;

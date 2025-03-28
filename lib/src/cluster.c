@@ -129,8 +129,24 @@ int cluster_reads(
     /* keep 2 pointers: cumulative sum of lengths and current sketch */
     if (!err) {
         nsketches = *((uint64_t*)index);
-        len_id = (sketch_metadata_t*)(index + sizeof(uint64_t)); /* init iterator to start of metadata */
-        mm = (mm_t*)(len_id + nsketches * sizeof(sketch_metadata_t)); /* jump to start of sketches */
+        len_id = (sketch_metadata_t*)(index + sizeof(nsketches)); /* init iterator to start of metadata */
+        mm = (mm_t*)(index + sizeof(nsketches) + nsketches * sizeof(sketch_metadata_t)); /* jump to start of sketches */
+#ifndef NDEBUG 
+        {
+            /*
+            mm_t* mm_itr = mm;
+            for (i = 0; i < nsketches; ++i) {
+                sketch_metadata_t* ld_itr = len_id + i;
+                fprintf(stderr, "[read] metadata %llu, %llu\n", ld_itr->id, ld_itr->size);
+                for (j = 0; j < ld_itr->size; ++j) {
+                    fprintf(stderr, "%llu, ", *(mm_itr + j));
+                }
+                fprintf(stderr, "\n");
+                mm_itr += ld_itr->size;
+            }
+            */
+        }
+#endif
         /* implement isonclust3 algorithm */
         kv_init(*clusters);
         kv_push(cluster_t, *clusters, empty_cluster);
@@ -145,6 +161,7 @@ int cluster_reads(
         best_cluster_idx = SIZE_MAX;
         best_similarity = similarity_threshold;
         for (j = 0; j < kv_size(*clusters); ++j) {
+            /* fprintf(stderr, "%llu, %llu, %llu, %llu\n", i, j, len_id->id, len_id->size); */
             if ((similarity = get_shared_count(mm, len_id->size, &kv_A(*clusters, j)) / len_id->size) > best_similarity) {
                 best_similarity = similarity;
                 best_cluster_idx = j;
@@ -189,8 +206,8 @@ int cluster_reads(
                     }
                 }
             }
-            if (best_cluster_idx != SIZE_MAX) { /* merge cluster at index j into cluster at index i */
-                if (!err) err = two_way_merge(kv_A(*clusters, j).minimizers.a, kv_A(*clusters, j).minimizers.n, &buffer, &kv_A(*clusters, i));
+            if (best_cluster_idx != SIZE_MAX) { /* merge cluster at index best_cluster_idx into cluster at index best_big_cluster_idx */
+                if (!err) err = two_way_merge(kv_A(*clusters, best_cluster_idx).minimizers.a, kv_A(*clusters, best_cluster_idx).minimizers.n, &buffer, &kv_A(*clusters, best_big_cluster_idx));
                 if (!err) { /* merge ids */
                     len_t big_size, small_size;
                     big_size = kv_A(*clusters, best_big_cluster_idx).ids.n;

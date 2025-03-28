@@ -49,21 +49,6 @@ int make_qual_filter(char const *const qual, const size_t seq_len, const uint8_t
         filter->a[i] = kmer_quality > threshold;
     }
     if (buffer) free(buffer);
-
-    /*
-    kmer_quality = 1;
-    buf_idx = 0;
-    if (!(buffer = malloc(k * sizeof(double)))) err = ERR_MALLOC;
-    if (!err) for (i = 0; i < k; ++i) buffer[i] = 1;
-    if (!err) for (i = 0; i < seq_len; ++i) { FIXME find a numerically stable algorithm, rn if kmer_quality goes to 0, then everything is 0 
-        q = buffer[buf_idx];
-        buffer[buf_idx] = 1.0 - pow(10.0, -((int)qual[i] - 33) / 10);
-        kmer_quality /= q; no need to check if i >= k since buffer is all 1s at the beginning 
-        kmer_quality *= buffer[buf_idx];
-        if ((i + 1) >= k) kv_push(unsigned char, *filter, kmer_quality > threshold);
-        buf_idx = (buf_idx + 1) % k;
-    }
-    */
     assert(seq_len < k || filter->n == seq_len - k + 1);
     return err;
 }
@@ -112,30 +97,39 @@ int sketch_reads_from_fastq(
     if (seq) kseq_destroy(seq);
     if (fp) gzclose(fp);
     assert(lengths.n == read_id);
-    radix_sort_sketch_size(lengths.a, lengths.a + lengths.n); /* sort by increasing length sizes */
+    radix_sort_sketch_size(lengths.a, lengths.a + lengths.n); /* sort by decreasing length sizes */
 #ifndef NDEBUG
-    if (lengths.n > 0) for (i = 0; !err && i < lengths.n - 1; ++i) { /* check radix sort output */
+    /*
+    if (lengths.n > 0) for (i = 0; !err && i < lengths.n - 1; ++i) {
         if (kv_A(lengths, i).metadata.size > kv_A(lengths, i + 1).metadata.size) {
             fprintf(stderr, "[sketch_reads] lengths are not stored in increasing order\n");
             err = ERR_LOGIC;
         }
     }
+    for (i = 0; i < mmzers.n; ++i) {
+        fprintf(stderr, "%llu\n", mmzers.a[i]);
+    }
+    */
 #endif
+    /* fprintf(stderr, "%llu total sketches, %llu total minimizers\n", lengths.n, mmzers.n); */
     oh = NULL;
     if (!err && !(oh = fopen(tmp_index_filename, "wb"))) err = ERR_FILE;
     cumulative_count = lengths.n;
     if (!err && fwrite(&cumulative_count, sizeof(cumulative_count), 1, oh) != 1) err = ERR_IO;
+    /* fprintf(stderr, "[write] nsketches: %llu\n", cumulative_count); */
     cumulative_count = 0;
     for (i = lengths.n - 1; !err && i != SIZE_MAX; --i) { /* write cumulative lengths */
         if (fwrite(&lengths.a[i].metadata, sizeof(sketch_metadata_t), 1, oh) != 1) err = ERR_IO;
     }
+    assert(ftell(oh) == (lengths.n * sizeof(sketch_metadata_t) + 8));
     for (i = lengths.n - 1; !err && i != SIZE_MAX; --i) { /* write sketches in the order given by lengths (from longest to shortest) */
-        size_id_handle *record = &kv_A(lengths, i); /* DO NOT merge the two for loops since actual sketches come after their lengths */
-        if (fwrite(mmzers.a + record->sketch_offset, sizeof(mm_t), record->metadata.size, oh) != record->metadata.size) err = ERR_IO;
+        size_id_handle const *const record = &lengths.a[i]; /* DO NOT merge the two for loops since actual sketches come after their lengths */
+        if (fwrite(&mmzers.a[record->sketch_offset], sizeof(mm_t), record->metadata.size, oh) != record->metadata.size) err = ERR_IO;
     }
     if (oh) {
         fflush(oh);
         fclose(oh);
+        oh = NULL;
     }
     kv_destroy(lengths);
     kv_destroy(mmzers);

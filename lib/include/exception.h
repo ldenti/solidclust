@@ -4,6 +4,8 @@
 #define FALSE 0
 #define TRUE 1
 
+/* #define NDEBUG */
+
 enum exception_t {
     OK = 0,
     ERR_PARSE,
