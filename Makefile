@@ -1,5 +1,5 @@
 CPU_CC        := $(CC)
-CPU_OPTS      := --std=c89 -Wall -Wno-format -Werror -g #-O3
+CPU_OPTS      := --std=c89 -Wall -Wno-format -Werror -O3 #-g
 CPU_MODULES   := exe lib bundled/klib bundled/xxhash bundled/xoshiro
 CPU_LIBS	  := -lm -lz # -lpthread
 CPU_BUILD_DIR := build
@@ -10,7 +10,7 @@ CPU_SRC       := $(foreach sdir,$(CPU_SRC_DIR),$(wildcard $(sdir)/*.c))
 CPU_INC       := $(addprefix -I,$(CPU_INC_DIR))
 CPU_BASE      := $(foreach sdir,$(CPU_SRC_DIR),$(notdir $(wildcard $(sdir)/*.c)))
 CPU_OBJ       := $(patsubst %.c,$(CPU_OBJ_DIR)/%.o,$(CPU_BASE))
-SANITIZER    := -fsanitize=address -fno-omit-frame-pointer
+# SANITIZER    := -fsanitize=address -fno-omit-frame-pointer
 
 .PHONY: all checkdirs clean
 

@@ -108,10 +108,11 @@ int cluster_reads(
     mm_t* mm;
     uint64_t nsketches;
     cluster_t empty_cluster;
-    size_t i, j, best_cluster_idx, best_big_cluster_idx;
+    size_t i, j, best_cluster_idx, best_big_cluster_idx, back_idx;
     double best_similarity, similarity;
     mmv_t buffer;
     assert(index_filename);
+    assert(clusters);
     err = OK;
     kv_init(empty_cluster.minimizers);
     kv_init(empty_cluster.ids);
@@ -133,7 +134,6 @@ int cluster_reads(
         mm = (mm_t*)(index + sizeof(nsketches) + nsketches * sizeof(sketch_metadata_t)); /* jump to start of sketches */
 #ifndef NDEBUG 
         {
-            /*
             mm_t* mm_itr = mm;
             for (i = 0; i < nsketches; ++i) {
                 sketch_metadata_t* ld_itr = len_id + i;
@@ -144,7 +144,6 @@ int cluster_reads(
                 fprintf(stderr, "\n");
                 mm_itr += ld_itr->size;
             }
-            */
         }
 #endif
         /* implement isonclust3 algorithm */
@@ -167,12 +166,14 @@ int cluster_reads(
                 best_cluster_idx = j;
             }
         }
+        assert(len_id->id < nsketches);
         if (best_cluster_idx != SIZE_MAX) { /* merge read and cluster */
             if (!err) err = two_way_merge(mm, len_id->size, &buffer, &kv_A(*clusters, best_cluster_idx));
             if (!err) kv_push(read_id_t, kv_A(*clusters, best_cluster_idx).ids, len_id->id);
         } else { /* append read as new cluster */
             kv_push(cluster_t, *clusters, empty_cluster);
-            size_t back_idx = kv_size(*clusters) - 1;
+            back_idx = kv_size(*clusters) - 1;
+            assert(back_idx != SIZE_MAX);
             kv_reserve(mm_t, kv_A(*clusters, back_idx).minimizers, len_id->size);
             assert(clusters->a[back_idx].minimizers.a);
             if (!err && memcpy(kv_A(*clusters, back_idx).minimizers.a, mm, len_id->size * sizeof(mm_t)) != kv_A(*clusters, back_idx).minimizers.a) err = ERR_RUNTIME;
@@ -207,19 +208,20 @@ int cluster_reads(
                 }
             }
             if (best_cluster_idx != SIZE_MAX) { /* merge cluster at index best_cluster_idx into cluster at index best_big_cluster_idx */
+                assert(best_big_cluster_idx != SIZE_MAX);
                 if (!err) err = two_way_merge(kv_A(*clusters, best_cluster_idx).minimizers.a, kv_A(*clusters, best_cluster_idx).minimizers.n, &buffer, &kv_A(*clusters, best_big_cluster_idx));
                 if (!err) { /* merge ids */
                     len_t big_size, small_size;
                     big_size = kv_A(*clusters, best_big_cluster_idx).ids.n;
                     small_size = kv_A(*clusters, best_cluster_idx).ids.n;
                     kv_reserve(read_id_t, kv_A(*clusters, best_big_cluster_idx).ids, big_size + small_size);
-                    memcpy(kv_A(*clusters, best_big_cluster_idx).ids.a + big_size, kv_A(*clusters, best_cluster_idx).ids.a, small_size * sizeof(id_t));
+                    memcpy(kv_A(*clusters, best_big_cluster_idx).ids.a + big_size, kv_A(*clusters, best_cluster_idx).ids.a, small_size * sizeof(read_id_t));
                     kv_A(*clusters, best_big_cluster_idx).ids.n = big_size + small_size;
                     done[best_cluster_idx] = TRUE;
                 }
             }
         } while (best_cluster_idx != SIZE_MAX);
-        assert(!done[0]); /* due to sorting the first cluster is the biggest and it is always active */
+        assert(!done[0]); /* due to sorting the first cluster is the bigger one and it is always active */
         i = seek_done(done, clusters->n, 0);
         j = seek_not_done(done, clusters->n, clusters->n - 1);
         while(i < j) { /* swap to fill hole */

@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <assert.h>
 #include <math.h> 
 #include <zlib.h>
@@ -7,10 +8,6 @@
 #include "../include/sketch_reads.h"
 #include "../include/minimizer.h"
 #include "../include/ioc_types.h"
-
-#ifndef NDEBUG
-#include <stdio.h>
-#endif
 
 KSEQ_INIT(gzFile, gzread)
 
@@ -99,7 +96,6 @@ int sketch_reads_from_fastq(
     assert(lengths.n == read_id);
     radix_sort_sketch_size(lengths.a, lengths.a + lengths.n); /* sort by decreasing length sizes */
 #ifndef NDEBUG
-    /*
     if (lengths.n > 0) for (i = 0; !err && i < lengths.n - 1; ++i) {
         if (kv_A(lengths, i).metadata.size > kv_A(lengths, i + 1).metadata.size) {
             fprintf(stderr, "[sketch_reads] lengths are not stored in increasing order\n");
@@ -109,7 +105,6 @@ int sketch_reads_from_fastq(
     for (i = 0; i < mmzers.n; ++i) {
         fprintf(stderr, "%llu\n", mmzers.a[i]);
     }
-    */
 #endif
     /* fprintf(stderr, "%llu total sketches, %llu total minimizers\n", lengths.n, mmzers.n); */
     oh = NULL;
