@@ -3,12 +3,16 @@
 #include <string.h>
 #include <time.h>
 #include <assert.h>
+#define __USE_POSIX199309
+#include <time.h>
 #include "../../bundled/xoshiro/include/xoshiro256++.h"
 #include "../../bundled/klib/include/ketopt.h"
 #include "../../lib/include/exception.h"
 #include "../include/option.h"
 #include "../../lib/include/sketch_reads.h"
 #include "../../lib/include/cluster.h"
+
+#define NS_IN_SEC (1000 * 1000 * 1000)
 
 int print_usage(FILE *ostrm);
 int parse_options(int argc, char **argv, option_t *const opts);
@@ -18,13 +22,43 @@ int main(int argc, char **argv) {
     int err;
     option_t opts;
     clusters_t clusters;
+    struct timespec tstart, tstop;
+    unsigned long long wallclock_elapsed;
     err = OK;
     init_options(&opts);
     kv_init(clusters);
-    if (!err) err = parse_options(argc, argv, &opts);
-    if (!err) err = sketch_reads_from_fastq(opts.input_fastq, opts.k, opts.w, opts.canonical, opts.seed, opts.quality_threshold, opts.tmp_filename);
-    if (!err) err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, opts.post_cluster, &clusters);
-    if (!err) err = cluster_save(&clusters, opts.output_mapping);
+    if (!err) {
+        clock_gettime(CLOCK_MONOTONIC, &tstart);
+        err = parse_options(argc, argv, &opts);
+        clock_gettime(CLOCK_MONOTONIC, &tstop);
+        wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
+        wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
+        fprintf(stderr, "Options parsed in %llu ns\n", wallclock_elapsed);
+    }
+    if (!err) {
+        clock_gettime(CLOCK_MONOTONIC, &tstart);
+        err = sketch_reads_from_fastq(opts.input_fastq, opts.k, opts.w, opts.canonical, opts.seed, opts.quality_threshold, opts.tmp_filename);
+        clock_gettime(CLOCK_MONOTONIC, &tstop);
+        wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
+        wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
+        fprintf(stderr, "Reads sketched in %llu ns\n", wallclock_elapsed);
+    }
+    if (!err) {
+        clock_gettime(CLOCK_MONOTONIC, &tstart);
+        err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, opts.post_cluster, &clusters);\
+        clock_gettime(CLOCK_MONOTONIC, &tstop);
+        wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
+        wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
+        fprintf(stderr, "Reads clustered in %llu ns\n", wallclock_elapsed);
+    }
+    if (!err) {
+        clock_gettime(CLOCK_MONOTONIC, &tstart);
+        err = cluster_save(&clusters, opts.output_mapping);
+        clock_gettime(CLOCK_MONOTONIC, &tstop);
+        wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
+        wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
+        fprintf(stderr, "Cluster written in %llu ns\n", wallclock_elapsed);
+    }
     destroy_options(&opts);
     return err;
 }
