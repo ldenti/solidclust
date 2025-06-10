@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include "../../bundled/klib/include/ksort.h"
+#include "../../bundled/klib/include/khash.h"
 #include "../include/exception.h"
 #include "../include/minimizer.h"
 #include "../include/sketch_reads.h"
@@ -93,6 +94,22 @@ size_t seek_not_done(unsigned char const *const flags, const size_t size, const 
     assert(flags);
     for (i = rstart; i != 0 && flags[i]; --i) {}
     return i;
+}
+
+int cluster_reads_new_version(
+    char const *const index_filename, 
+    const double similarity_threshold, 
+    const double merge_threhsold,
+    clusters_t* clusters
+) {
+    int err;
+
+    assert(index_filename);
+    assert(clusters);
+
+    err = OK;
+    /* TODO */
+    return err;
 }
 
 int cluster_reads(
@@ -221,7 +238,7 @@ int cluster_reads(
                 }
             }
         } while (best_cluster_idx != SIZE_MAX);
-        assert(!done[0]); /* due to sorting the first cluster is the bigger one and it is always active */
+        assert(!done[0]); /* due to sorting the first cluster is the bigger one and is always active */
         i = seek_done(done, clusters->n, 0);
         j = seek_not_done(done, clusters->n, clusters->n - 1);
         while(i < j) { /* swap to fill hole */
@@ -237,7 +254,7 @@ int cluster_reads(
             kv_destroy(kv_A(*clusters, j).minimizers);
             kv_destroy(kv_A(*clusters, j).ids); 
         }
-        clusters->n = i; /* resize vector with to true clusters */
+        clusters->n = i; /* resize vector to true clusters */
         if (done) free(done);
     }
     kv_destroy(buffer);
