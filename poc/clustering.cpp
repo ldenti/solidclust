@@ -78,6 +78,7 @@ int main(int argc, char *argv[])
     std::vector<std::size_t> hits;
     std::vector<mm_t> mm_buffer;
     for (std::size_t i = 1; i < nsketches; ++i) { // for all sketched reads
+        hits.clear();
         hits.resize(clusters.size());
         mm_itr = mm;
         mm_buffer.clear();

@@ -58,7 +58,7 @@ int main() {
 #define kv_A(v, i) ((v).a[(i)])
 #define kv_pop(v) ((v).a[--(v).n])
 #define kv_size(v) ((v).n)
-#define kv_max(v) ((v).m)
+#define kv_capacity(v) ((v).m)
 
 #define kv_reserve(type, v, s)  ((v).m = (s), (v).a = (type*)realloc((v).a, sizeof(type) * (v).m))
 
@@ -86,5 +86,37 @@ int main() {
 						   (v).a = (type*)realloc((v).a, sizeof(type) * (v).m), 0) \
 						  : (v).n <= (size_t)(i)? (v).n = (i) + 1 \
 						  : 0), (v).a[(i)])
+
+#define kv_insert(type, v, i, x) \
+	do { \
+		size_t j; \
+		if (i < kv_size(v)) { \
+			kv_push(type, v, x); \
+			for (j = kv_size(v) - 1; j > i; --j) { \
+				kv_A(v, j) = kv_A(v, j - 1); \
+			} \
+			kv_A(v, i) = x; \
+		} else { \
+			assert(0); \
+		} \
+	} while(0)
+
+#define kv_clear(v, x)\
+	do { /* shadow variable i */\ 
+		size_t i;\
+		for (i = 0; i < (v).n; ++i) {\
+			(v).a[i] = (x);\
+		}\
+	} while(0)
+
+#define kv_resize(type, v, s)\
+	do {\
+	if (kv_capacity(v) < s) {\
+		if (kv_size(v) >= kv_capacity(v)) {\
+			kv_reserve(type, v, s);\
+		}\
+	}\
+	(v).n = s;\
+	} while(0)
 
 #endif
