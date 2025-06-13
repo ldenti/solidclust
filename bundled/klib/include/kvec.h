@@ -90,23 +90,23 @@ int main() {
 #define kv_insert(type, v, i, x) \
 	do { \
 		size_t j; \
-		if (i < kv_size(v)) { \
-			kv_push(type, v, x); \
-			for (j = kv_size(v) - 1; j > i; --j) { \
-				kv_A(v, j) = kv_A(v, j - 1); \
-			} \
-			kv_A(v, i) = x; \
-		} else { \
-			assert(0); \
+		assert(i <= kv_size(v)); \
+		kv_push(type, v, x); \
+		assert(i < kv_size(v)); \
+		for (j = kv_size(v) - 1; j > i; --j) { \
+			kv_A(v, j) = kv_A(v, j - 1); \
 		} \
+		kv_A(v, i) = x; \
 	} while(0)
 
-#define kv_clear(v, x)\
-	do { /* shadow variable i */\ 
-		size_t i;\
-		for (i = 0; i < (v).n; ++i) {\
-			(v).a[i] = (x);\
-		}\
+#define kv_clear(v) ((v).n = 0)
+
+#define kv_reset(v, x) \
+	do { \
+		size_t i; \
+		for (i = 0; i < (v).n; ++i) { \
+			(v).a[i] = (x); \
+		} \
 	} while(0)
 
 #define kv_resize(type, v, s)\

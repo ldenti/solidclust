@@ -8,10 +8,11 @@
 #include <iostream>
 #include <vector>
 #include <unordered_map>
-#include <cassert>
 
 #include "../lib/include/sketch_reads.h"
 #include "../lib/include/minimizer.h"
+
+#include <assert.h>
 
 struct cluster_t {
     cluster_t() {}
@@ -23,6 +24,8 @@ int cluster_save(
     const std::vector<cluster_t>& clusters, 
     char const *const output_filename
 );
+
+int cluster_print(const std::vector<cluster_t>& clusters);
 
 int main(int argc, char *argv[])
 {
@@ -55,7 +58,6 @@ int main(int argc, char *argv[])
     }
     if ((index = mmap(NULL, filestat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED) return 2;
 
-    
     std::unordered_map<mm_t, std::vector<uint32_t>> mm2clusters; // map minimizers to list of clusters they appear in so far
     
     std::size_t nsketches = *((uint64_t*)index);
@@ -78,8 +80,8 @@ int main(int argc, char *argv[])
     std::vector<std::size_t> hits;
     std::vector<mm_t> mm_buffer;
     for (std::size_t i = 1; i < nsketches; ++i) { // for all sketched reads
-        hits.clear();
         hits.resize(clusters.size());
+        for (auto& v : hits) v = 0;
         mm_itr = mm;
         mm_buffer.clear();
         for (std::size_t j = 0; j < len_id->size; ++j) { // for the minimizers in read
@@ -96,8 +98,10 @@ int main(int argc, char *argv[])
             ++mm_itr;
         }
         auto max_itr = std::max_element(hits.begin(), hits.end());
+        std::size_t best_cluster_idx = max_itr - hits.begin();
+        // for (auto v : hits) std::cerr << v << " ";
+        // std::cerr << "\nhits.size() = " << hits.size() << ", best cluster id = " << best_cluster_idx << "\n";
         if (static_cast<double>(*max_itr) / len_id->size > similarity_threshold) { // merge read into best cluster
-            std::size_t best_cluster_idx = max_itr - hits.begin();
             clusters.at(best_cluster_idx).ids.push_back(len_id->id); // add read to cluster
             for (auto mm : mm_buffer) { // for the minimizers in read
                 auto itr = mm2clusters.find(mm);
@@ -105,12 +109,12 @@ int main(int argc, char *argv[])
                     mm2clusters[mm] = std::vector<uint32_t>{static_cast<uint32_t>(best_cluster_idx)};
                 } else { // minimizer already seen before
                     auto lb = std::lower_bound(itr->second.begin(), itr->second.end(), best_cluster_idx); // O(log2(N)) complexity, if lists are short maybe O(N) is better
-                    if (*lb != best_cluster_idx) itr->second.insert(lb, best_cluster_idx); // insert cluster idx to preserve order and set property
+                    if (lb == itr->second.end() or *lb != best_cluster_idx) itr->second.insert(lb, best_cluster_idx); // insert cluster idx to preserve order and set property
                 }
                 // add minimizers to clusters by preserving set property (no duplicates) and order
                 auto& cluster_mms = clusters.at(best_cluster_idx).minimizers;
                 auto lb = std::lower_bound(cluster_mms.begin(), cluster_mms.end(), mm);
-                if (*lb != mm) cluster_mms.insert(lb, mm);
+                if (lb == cluster_mms.end() or *lb != mm) cluster_mms.insert(lb, mm);
             }
         } else { // new cluster
             clusters.emplace_back();
@@ -141,6 +145,23 @@ int main(int argc, char *argv[])
     if (cluster_save(clusters, output_filename.c_str())) {
         std::cerr << "Error writing output file\n";
         return 5;
+    }
+    // if (cluster_print(clusters)) {
+    //     std::cerr << "Error while printing clusters\n";
+    //     return 5;
+    // }
+    return 0;
+}
+
+int cluster_print(const std::vector<cluster_t>& clusters) {
+    size_t i, j;
+    for (i = 0; i < clusters.size(); ++i) {
+        fprintf(stderr, "cluster[%lu] : [", i);
+        if (clusters.at(i).ids.size() == 0) return 1;
+        for (j = 0; j < clusters.at(i).ids.size() - 1; ++j) {
+            fprintf(stderr, "%llu, ", clusters.at(i).ids.at(j));
+        }
+        fprintf(stderr, "%llu]\n", clusters.at(i).ids.at(clusters.at(i).ids.size() - 1));
     }
     return 0;
 }

@@ -1,7 +1,8 @@
 #include <stddef.h>
 #include <stdlib.h>
-#include <assert.h>
 #include "../include/option.h"
+#include "../../lib/include/exception.h"
+#include <assert.h>
 
 void init_options(option_t *const opts) {
     assert(opts);

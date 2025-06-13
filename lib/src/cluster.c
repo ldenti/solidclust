@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -15,50 +14,28 @@
 #include "../include/sketch_reads.h"
 #include "../include/cluster.h"
 
+#include <assert.h>
+
 #define cmp(x, y) ((x).minimizers.n > (y).minimizers.n)
 KSORT_INIT(cluster, cluster_t, cmp)
 
 typedef kvec_t(uint32_t) clustersidv_t;
 KHASHL_MAP_INIT(KH_LOCAL, mm2cluster_t, mm2cls, mm_t, clustersidv_t, kh_hash_uint64, kh_eq_generic)
 
-size_t seek_done(unsigned char const *const flags, const size_t size, const size_t start) {
-    size_t i;
-    assert(flags);
-    for (i = start; i < size && !flags[i]; ++i) {}
-    return i;
-}
+size_t seek_done(unsigned char const *const flags, const size_t size, const size_t start);
+size_t seek_not_done(unsigned char const *const flags, const size_t size, const size_t rstart);
+double get_shared_count(mm_t const *const sketch, const size_t sketch_size, cluster_t const *const cluster);
+int two_way_merge(mm_t const *const sketch, const size_t sketch_size, mmv_t *const buffer, cluster_t* cluster);
+size_t clsid_lower_bound(uint32_t a[], size_t n, uint32_t threshold_value);
+size_t minimizer_lower_bound(mm_t a[], size_t n, uint32_t threshold_value);
 
-size_t seek_not_done(unsigned char const *const flags, const size_t size, const size_t rstart) {
-    size_t i;
-    assert(flags);
-    for (i = rstart; i != 0 && flags[i]; --i) {}
-    return i;
-}
-
-size_t my_lower_bound(uint32_t a[], size_t n, uint32_t threshold_value) {
-    size_t l, h;
-    assert(a);
-    l = 0;
-    h = n; /* Not n - 1 */
-    while (l < h) {
-        size_t mid =  l + (h - l) / 2;
-        if (threshold_value <= a[mid]) {
-            h = mid;
-        } else {
-            l = mid + 1;
-        }
-    }
-    return l;
-}
-
-typedef kvec_t(size_t) hitv_t;
-
-int cluster_reads_fast(
+int cluster_reads(
     char const *const index_filename, 
     const double similarity_threshold, 
     const double merge_threhsold,
     clusters_t* clusters
 ) {
+    typedef kvec_t(size_t) hitv_t;
     int err, fd, absent;
     struct stat filestat;
     void *index;
@@ -67,7 +44,7 @@ int cluster_reads_fast(
     uint64_t nsketches;
     cluster_t empty_cluster;
     size_t i, j, k, best_cluster_idx, best_big_cluster_idx, back_idx, insertion_idx;
-    double best_similarity, similarity;
+    double best_similarity;
     mmv_t buffer;
     hitv_t hits;
     mm2cluster_t *mm2clusters;
@@ -118,48 +95,48 @@ int cluster_reads_fast(
         ++len_id;
     }
     for (i = 1; !err && i < nsketches; ++i) {
+        if (kv_capacity(hits) == clusters->n) kv_reserve(size_t, hits, 2*clusters->n);
         kv_resize(size_t, hits, clusters->n);
-        kv_clear(hits, 0);
+        assert(kv_size(hits) != 0);
+        kv_reset(hits, 0);
         mm_itr = mm;
-        kv_clear(buffer, 0); /* buffer is to avoid reading multiple times from mapped memory */
+        kv_clear(buffer); /* buffer is to avoid reading multiple times from mapped memory */
         for (j = 0; j < len_id->size; ++j) { /* for each minimizer in read */
             map_itr = mm2cls_get(mm2clusters, *mm_itr);
-            if (map_itr < kh_end(mm2clusters)) { /* new minimizers not seen before */
-                /* do nothing, add to cluster later */
-            } else { /* minimizer already seen before */
+            if (map_itr < kh_end(mm2clusters)) { /* minimizer already seen before */
                 clustersidv_t cluster_ids = kh_val(mm2clusters, map_itr);
                 for (k = 0; k < cluster_ids.n; ++k) ++kv_A(hits, kv_A(cluster_ids, k));
-            }
+            } /* else, if new minimizers not seen before do nothing, add to cluster later */
             kv_push(mm_t, buffer, *mm_itr);
             ++mm_itr;
         }
         best_cluster_idx = 0;
-        if (kv_size(hits) != 0) best_big_cluster_idx = kv_A(buffer, best_cluster_idx); /* reusing variable for tmp computation */
+        best_big_cluster_idx = kv_A(hits, best_cluster_idx); /* reusing variable for tmp computation */
         for (j = 0; j < kv_size(hits); ++j) { /* equivalent to best_cluster_idx = std::max_element(hits.begin(), hits.end()); */
             if (kv_A(hits, j) > best_big_cluster_idx) {
                 best_cluster_idx = j;
                 best_big_cluster_idx = kv_A(hits, j);
             }
         }
-        
+        /* fprintf(stderr, "hits.size = %llu, best cluster id = %llu\n", kv_size(hits), best_cluster_idx); */
         if ((double)kv_A(hits, best_cluster_idx) / len_id->size > similarity_threshold) { /* merge read into best cluster */
             kv_push(read_id_t, kv_A(*clusters, best_cluster_idx).ids, len_id->id); /* add read to cluster */
             for (j = 0; j < kv_size(buffer); ++j) { /* for the minimizers in read */
                 minimizer = kv_A(buffer, j);
                 map_itr = mm2cls_put(mm2clusters, minimizer, &absent);
-                if (absent) { /* new minimizers not seen before */
+                if (absent) { /* new minimizer not seen before */
                     kv_init(kh_val(mm2clusters, map_itr));
-                    kv_push(uint32_t, kh_val(mm2clusters, map_itr), best_cluster_idx); /* minimizers in first cluster at index 0 */
-                } else { /* minimizer already seen before */
+                    kv_push(uint32_t, kh_val(mm2clusters, map_itr), best_cluster_idx);
+                } else { 
                     clustersidv_t *clsids;
                     clsids = &kh_val(mm2clusters, map_itr);
-                    insertion_idx = my_lower_bound(clsids->a, clsids->n, best_cluster_idx); /* O(log2(N)) complexity, if lists are short maybe O(N) is better */
-                    if (clsids->a[insertion_idx] != best_cluster_idx) kv_insert(uint32_t, *clsids, insertion_idx, best_cluster_idx); /* insert cluster idx to preserve order and set property */
+                    insertion_idx = clsid_lower_bound(clsids->a, clsids->n, best_cluster_idx); /* O(log2(N)) complexity, if lists are short maybe O(N) is better */
+                    if (insertion_idx == kv_size(*clsids) || clsids->a[insertion_idx] != best_cluster_idx) kv_insert(uint32_t, *clsids, insertion_idx, best_cluster_idx); /* insert cluster idx to preserve order and set property */
                 }
                 /* add minimizers to clusters by preserving set property (no duplicates) and order */
                 mmv_t *cluster_mms = &kv_A(*clusters, best_cluster_idx).minimizers;
-                insertion_idx = my_lower_bound(cluster_mms->a, cluster_mms->n, minimizer);
-                if (cluster_mms->a[insertion_idx] != minimizer) kv_insert(mm_t, *cluster_mms, insertion_idx, minimizer);
+                insertion_idx = minimizer_lower_bound(cluster_mms->a, cluster_mms->n, minimizer);
+                if (insertion_idx == kv_size(*cluster_mms) || cluster_mms->a[insertion_idx] != minimizer) kv_insert(mm_t, *cluster_mms, insertion_idx, minimizer);
             }
         } else { /* new cluster */
             kv_push(cluster_t, *clusters, empty_cluster);
@@ -176,8 +153,8 @@ int cluster_reads_fast(
                 map_itr = mm2cls_put(mm2clusters, minimizer, &absent);
                 if (absent) { /* new minimizers not seen before */
                     kv_init(kh_val(mm2clusters, map_itr));
-                    kv_push(uint32_t, kh_val(mm2clusters, map_itr), kv_size(*clusters) - 1); /* minimizers in first cluster at index 0 */
-                } else { // minimizer already seen before
+                    kv_push(uint32_t, kh_val(mm2clusters, map_itr), kv_size(*clusters) - 1);
+                } else { /* minimizer already seen before */
                     kv_push(uint32_t, kh_val(mm2clusters, map_itr), kv_size(*clusters) - 1);
                 }
             }
@@ -189,6 +166,9 @@ int cluster_reads_fast(
     kv_destroy(empty_cluster.minimizers);
     kv_destroy(empty_cluster.ids);
     kv_destroy(hits);
+    kh_foreach(mm2clusters, map_itr) {
+        kv_destroy(kh_val(mm2clusters, map_itr));
+    }
     mm2cls_destroy(mm2clusters);
     if (!err && munmap(index, filestat.st_size) != 0) err = ERR_RUNTIME;
     if (!err && close(fd)) return ERR_FILE;
@@ -252,7 +232,112 @@ int cluster_reads_fast(
     return err;
 }
 
-/* ----------------------------- slow version ------------------------------ */
+/*
+    FIXME: this function writes a csv file only mapping reads ids to clusters. 
+    Extend it to split the original Fastq into the actual clusters or write/re-use a separate tool for that.
+*/
+int cluster_save(
+    clusters_t const *const clusters, 
+    char const *const output_filename
+) {
+    int err;
+    FILE *comma_output;
+    size_t i, j;
+    /* kvec_t(char) filename; */
+    assert(clusters);
+    err = OK;
+    /* 
+    kv_init(filename);
+    of_len = strlen(output_folder);
+    i = of_len - 1;
+    while (i < of_len && output_folder[i] == '/') { --of_len; }
+    kv_reserve(char, filename, of_len + 17);
+    if (!err && !filename.a) err = ERR_MALLOC;
+    if (!err && memcpy(filename.a, output_folder, of_len) != filename.a) err = ERR_RUNTIME;
+    if (!err && memcpy(filename.a + of_len, "/cluster_ids.csv", 17) != filename.a + of_len) err = ERR_RUNTIME;
+    if (!err && (comma_output = fopen(filename.a, "w")) == NULL) err = ERR_FILE;
+    */
+    if (output_filename) {
+        if ((comma_output = fopen(output_filename, "w")) == NULL) err = ERR_FILE;
+    } else {
+        comma_output = stdout;
+    } 
+    if (!err) {
+        fprintf(comma_output, "read ID,cluster ID\n");
+        for (i = 0; i < clusters->n; ++i) {
+            for (j = 0; j < clusters->a[i].ids.n; ++j) {
+                fprintf(comma_output, "%llu,%lu\n", clusters->a[i].ids.a[j], i);
+            }
+        }
+    }
+    if (comma_output) {
+        fflush(comma_output);
+        if (comma_output != stdout) fclose(comma_output);
+    }
+    /* kv_destroy(filename); */
+    return err;
+}
+
+int cluster_print(clusters_t const *const clusters) {
+    size_t i, j;
+    for (i = 0; i < clusters->n; ++i) {
+        fprintf(stderr, "cluster[%llu] : [", i);
+        if (clusters->a[i].ids.n == 0) return ERR_LOGIC;
+        for (j = 0; j < clusters->a[i].ids.n - 1; ++j) {
+            fprintf(stderr, "%llu, ", clusters->a[i].ids.a[j]);
+        }
+        fprintf(stderr, "%llu]\n", clusters->a[i].ids.a[clusters->a[i].ids.n - 1]);
+    }
+    return OK;
+}
+
+/*--------------------------------- private --------------------------------*/
+
+size_t clsid_lower_bound(uint32_t a[], size_t n, uint32_t threshold_value) {
+    size_t l, h;
+    assert(a);
+    l = 0;
+    h = n; /* Not n - 1 */
+    while (l < h) {
+        size_t mid =  l + (h - l) / 2;
+        if (threshold_value <= a[mid]) {
+            h = mid;
+        } else {
+            l = mid + 1;
+        }
+    }
+    return l;
+}
+
+size_t minimizer_lower_bound(mm_t a[], size_t n, uint32_t threshold_value) {
+    size_t l, h;
+    assert(a);
+    l = 0;
+    h = n; /* Not n - 1 */
+    while (l < h) {
+        size_t mid =  l + (h - l) / 2;
+        if (threshold_value <= a[mid]) {
+            h = mid;
+        } else {
+            l = mid + 1;
+        }
+    }
+    return l;
+}
+
+size_t seek_done(unsigned char const *const flags, const size_t size, const size_t start) {
+    size_t i;
+    assert(flags);
+    for (i = start; i < size && !flags[i]; ++i) {}
+    return i;
+}
+
+size_t seek_not_done(unsigned char const *const flags, const size_t size, const size_t rstart) {
+    size_t i;
+    assert(flags);
+    for (i = rstart; i != 0 && flags[i]; --i) {}
+    return i;
+}
 
 double get_shared_count(mm_t const *const sketch, const size_t sketch_size, cluster_t const *const cluster) {
     double shared;
@@ -317,6 +402,8 @@ int two_way_merge(mm_t const *const sketch, const size_t sketch_size, mmv_t *con
     if (!err) cluster->minimizers.n = buffer->n;
     return err;
 }
+
+/* ----------------------------- slow version ------------------------------ */
 
 int cluster_reads_slow(
     char const *const index_filename, 
@@ -465,51 +552,5 @@ int cluster_reads_slow(
     }
     kv_destroy(buffer);
     for (i = 0; i < kv_size(*clusters); ++i) kv_destroy(kv_A(*clusters, i).minimizers); /* deallocate all remaining minimizers */
-    return err;
-}
-
-/*
-    FIXME: this function writes a csv file only mapping reads ids to clusters. 
-    Extend it to split the original Fastq into the actual clusters or write/re-use a separate tool for that.
-*/
-int cluster_save(
-    clusters_t const *const clusters, 
-    char const *const output_filename
-) {
-    int err;
-    FILE *comma_output;
-    size_t i, j;
-    /* kvec_t(char) filename; */
-    assert(clusters);
-    err = OK;
-    /* 
-    kv_init(filename);
-    of_len = strlen(output_folder);
-    i = of_len - 1;
-    while (i < of_len && output_folder[i] == '/') { --of_len; }
-    kv_reserve(char, filename, of_len + 17);
-    if (!err && !filename.a) err = ERR_MALLOC;
-    if (!err && memcpy(filename.a, output_folder, of_len) != filename.a) err = ERR_RUNTIME;
-    if (!err && memcpy(filename.a + of_len, "/cluster_ids.csv", 17) != filename.a + of_len) err = ERR_RUNTIME;
-    if (!err && (comma_output = fopen(filename.a, "w")) == NULL) err = ERR_FILE;
-    */
-    if (output_filename) {
-        if ((comma_output = fopen(output_filename, "w")) == NULL) err = ERR_FILE;
-    } else {
-        comma_output = stdout;
-    } 
-    if (!err) {
-        fprintf(comma_output, "read ID,cluster ID\n");
-        for (i = 0; i < clusters->n; ++i) {
-            for (j = 0; j < clusters->a[i].ids.n; ++j) {
-                fprintf(comma_output, "%llu,%lu\n", clusters->a[i].ids.a[j], i);
-            }
-        }
-    }
-    if (comma_output) {
-        fflush(comma_output);
-        if (comma_output != stdout) fclose(comma_output);
-    }
-    /* kv_destroy(filename); */
     return err;
 }

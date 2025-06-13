@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include <assert.h>
 #define __USE_POSIX199309
 #include <time.h>
 #include "../../bundled/xoshiro/include/xoshiro256++.h"
@@ -12,6 +11,8 @@
 #include "../../lib/include/sketch_reads.h"
 #include "../../lib/include/cluster.h"
 
+#include <assert.h>
+
 #define NS_IN_SEC (1000 * 1000 * 1000)
 
 int print_usage(FILE *ostrm);
@@ -20,6 +21,7 @@ int generate_tmp_filename(char *const buffer, size_t buffer_len);
 
 int main(int argc, char **argv) {
     int err;
+    size_t i;
     option_t opts;
     clusters_t clusters;
     struct timespec tstart, tstop;
@@ -45,7 +47,7 @@ int main(int argc, char **argv) {
     }
     if (!err) {
         clock_gettime(CLOCK_MONOTONIC, &tstart);
-        err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, opts.post_cluster, &clusters);\
+        err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, opts.post_cluster, &clusters);
         clock_gettime(CLOCK_MONOTONIC, &tstop);
         wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
         wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
@@ -59,6 +61,12 @@ int main(int argc, char **argv) {
         wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
         fprintf(stderr, "Cluster written in %llu ns\n", wallclock_elapsed);
     }
+    /* if (!err) err = cluster_print(&clusters); */
+    
+    for (i = 0; i < clusters.n; ++i) {
+        kv_destroy(clusters.a[i].ids);
+    }
+    kv_destroy(clusters);
     destroy_options(&opts);
     return err;
 }

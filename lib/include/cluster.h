@@ -25,4 +25,6 @@ int cluster_save(
     char const *const output_folder
 );
 
+int cluster_print(clusters_t const *const clusters);
+
 #endif /* CLUSTER_H */

@@ -48,12 +48,14 @@ typedef unsigned long khint64_t;
 typedef unsigned long long khint64_t;
 #endif
 
-#ifndef kh_inline
+#if !defined(kh_inline) && (__STDC_VERSION__ >= 199901L)
 #ifdef _MSC_VER
 #define kh_inline __inline
 #else
 #define kh_inline inline
 #endif
+#else
+#define kh_inline 
 #endif /* kh_inline */
 
 #ifndef klib_unused

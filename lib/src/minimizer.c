@@ -1,7 +1,8 @@
-#include <assert.h>
 #include "../../bundled/xxhash/include/xxhash.h"
 #include "../include/exception.h"
 #include "../include/minimizer.h"
+
+#include <assert.h>
 
 const uint8_t seq_nt4_table[256] = {
     4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
