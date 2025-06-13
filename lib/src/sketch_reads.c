@@ -43,7 +43,7 @@ int make_qual_filter(char const *const qual, const size_t seq_len, const uint8_t
         for (i = 0; i < k; ++i) {
             kmer_quality *= qual[filter->n + i];
         }
-        filter->a[i] = kmer_quality > threshold;
+        filter->a[filter->n] = kmer_quality > threshold;
     }
     if (buffer) free(buffer);
     assert(seq_len < k || filter->n == seq_len - k + 1);
