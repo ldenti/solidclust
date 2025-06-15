@@ -14,6 +14,8 @@
 #include <assert.h>
 
 #define NS_IN_SEC (1000 * 1000 * 1000)
+#define NS_IN_USEC 1000
+#define RESOLUTION NS_IN_USEC
 
 int print_usage(FILE *ostrm);
 int parse_options(int argc, char **argv, option_t *const opts);
@@ -35,7 +37,7 @@ int main(int argc, char **argv) {
         clock_gettime(CLOCK_MONOTONIC, &tstop);
         wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
         wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
-        fprintf(stderr, "Options parsed in %llu ns\n", wallclock_elapsed);
+        fprintf(stderr, "Options parsed in %llu us\n", wallclock_elapsed / RESOLUTION);
     }
     if (!err) {
         clock_gettime(CLOCK_MONOTONIC, &tstart);
@@ -43,15 +45,23 @@ int main(int argc, char **argv) {
         clock_gettime(CLOCK_MONOTONIC, &tstop);
         wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
         wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
-        fprintf(stderr, "Reads sketched in %llu ns\n", wallclock_elapsed);
+        fprintf(stderr, "Reads sketched in %llu us\n", wallclock_elapsed / RESOLUTION);
     }
     if (!err) {
         clock_gettime(CLOCK_MONOTONIC, &tstart);
-        err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, opts.post_cluster, &clusters);
+        err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, &clusters);
         clock_gettime(CLOCK_MONOTONIC, &tstop);
         wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
         wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
-        fprintf(stderr, "Reads clustered in %llu ns\n", wallclock_elapsed);
+        fprintf(stderr, "Reads clustered in %llu us\n", wallclock_elapsed / RESOLUTION);
+    }
+    if (!err) {
+        clock_gettime(CLOCK_MONOTONIC, &tstart);
+        err = cluster_postprocessing(opts.post_cluster, &clusters);
+        clock_gettime(CLOCK_MONOTONIC, &tstop);
+        wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
+        wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
+        fprintf(stderr, "Postprocessing took %llu us\n", wallclock_elapsed / RESOLUTION);
     }
     if (!err) {
         clock_gettime(CLOCK_MONOTONIC, &tstart);
@@ -59,7 +69,7 @@ int main(int argc, char **argv) {
         clock_gettime(CLOCK_MONOTONIC, &tstop);
         wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
         wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
-        fprintf(stderr, "Cluster written in %llu ns\n", wallclock_elapsed);
+        fprintf(stderr, "Cluster written in %llu us\n", wallclock_elapsed / RESOLUTION);
     }
     /* if (!err) err = cluster_print(&clusters); */
     

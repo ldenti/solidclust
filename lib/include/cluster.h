@@ -16,8 +16,12 @@ typedef kvec_t(cluster_t) clusters_t;
 int cluster_reads(
     char const *const index_filename, 
     const double similarity_threshold, 
+    clusters_t *const clusters
+);
+
+int cluster_postprocessing(
     const double merge_threhsold,
-    clusters_t* clusters
+    clusters_t *const clusters
 );
 
 int cluster_save(

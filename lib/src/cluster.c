@@ -32,8 +32,7 @@ size_t minimizer_lower_bound(mm_t a[], size_t n, uint32_t threshold_value);
 int cluster_reads(
     char const *const index_filename, 
     const double similarity_threshold, 
-    const double merge_threhsold,
-    clusters_t* clusters
+    clusters_t *const clusters
 ) {
     typedef kvec_t(size_t) hitv_t;
     int err, fd, absent;
@@ -43,8 +42,7 @@ int cluster_reads(
     mm_t *mm, *mm_itr, minimizer;
     uint64_t nsketches;
     cluster_t empty_cluster;
-    size_t i, j, k, best_cluster_idx, best_big_cluster_idx, back_idx, insertion_idx;
-    double best_similarity;
+    size_t i, j, k, best_cluster_idx, best_value, back_idx, insertion_idx;
     mmv_t buffer;
     hitv_t hits;
     mm2cluster_t *mm2clusters;
@@ -111,11 +109,11 @@ int cluster_reads(
             ++mm_itr;
         }
         best_cluster_idx = 0;
-        best_big_cluster_idx = kv_A(hits, best_cluster_idx); /* reusing variable for tmp computation */
+        best_value = kv_A(hits, best_cluster_idx); /* reusing variable for tmp computation */
         for (j = 0; j < kv_size(hits); ++j) { /* equivalent to best_cluster_idx = std::max_element(hits.begin(), hits.end()); */
-            if (kv_A(hits, j) > best_big_cluster_idx) {
+            if (kv_A(hits, j) > best_value) {
                 best_cluster_idx = j;
-                best_big_cluster_idx = kv_A(hits, j);
+                best_value = kv_A(hits, j);
             }
         }
         /* fprintf(stderr, "hits.size = %llu, best cluster id = %llu\n", kv_size(hits), best_cluster_idx); */
@@ -166,22 +164,38 @@ int cluster_reads(
     kv_destroy(empty_cluster.minimizers);
     kv_destroy(empty_cluster.ids);
     kv_destroy(hits);
-    kh_foreach(mm2clusters, map_itr) {
-        kv_destroy(kh_val(mm2clusters, map_itr));
-    }
+    kv_destroy(buffer);
+    kh_foreach(mm2clusters, map_itr) kv_destroy(kh_val(mm2clusters, map_itr));
     mm2cls_destroy(mm2clusters);
-    if (!err && munmap(index, filestat.st_size) != 0) err = ERR_RUNTIME;
-    if (!err && close(fd)) return ERR_FILE;
     mm2clusters = NULL;
+    if (!err && munmap(index, filestat.st_size) != 0) err = ERR_RUNTIME;
+    index = NULL;
     len_id = NULL;
     mm = NULL;
+    mm_itr = NULL;
+    if (!err && close(fd)) err = ERR_FILE;
+    return err;
+}
 
-    if (!err && merge_threhsold != 0) {
-        unsigned char* done;
+int cluster_postprocessing(
+    const double merge_threhsold,
+    clusters_t *const clusters
+) {
+    int err;
+    double best_similarity;
+    unsigned char* done;
+    size_t i, j, best_cluster_idx, best_big_cluster_idx;
+    mmv_t buffer;
+
+    assert(clusters);
+    
+    if (merge_threhsold != 0) {
+        err = OK;
+        kv_init(buffer);
         ks_mergesort_cluster(clusters->n, clusters->a, NULL);
         done = NULL;
         if (!err && (done = calloc(clusters->n, 1)) == NULL) err = ERR_MALLOC;
-        do {
+        if (!err) do {
             best_similarity = merge_threhsold;
             best_big_cluster_idx = best_cluster_idx = SIZE_MAX;
             for (i = 0; i < kv_size(*clusters); ++i) {
@@ -207,11 +221,11 @@ int cluster_reads(
                     done[best_cluster_idx] = TRUE;
                 }
             }
-        } while (best_cluster_idx != SIZE_MAX);
+        } while (!err && best_cluster_idx != SIZE_MAX);
         assert(!done[0]); /* due to sorting the first cluster is the bigger one and is always active */
         i = seek_done(done, clusters->n, 0);
         j = seek_not_done(done, clusters->n, clusters->n - 1);
-        while(i < j) { /* swap to fill hole */
+        while(!err && i < j) { /* swap to fill hole */
             cluster_t tmp = clusters->a[i];
             clusters->a[i] = clusters->a[j];
             clusters->a[j] = tmp;
@@ -220,14 +234,14 @@ int cluster_reads(
             i = seek_done(done, j, i + 1);
             j = seek_not_done(done, clusters->n, j - 1);
         }
-        for (j = i; j < clusters->n; ++j) { /* deallocate merged clusters which are now the tail */
+        for (j = i; !err && j < clusters->n; ++j) { /* deallocate merged clusters which are now the tail */
             kv_destroy(kv_A(*clusters, j).minimizers);
             kv_destroy(kv_A(*clusters, j).ids); 
         }
         clusters->n = i; /* resize vector to true clusters */
         if (done) free(done);
+        kv_destroy(buffer);
     }
-    kv_destroy(buffer);
     for (i = 0; i < kv_size(*clusters); ++i) kv_destroy(kv_A(*clusters, i).minimizers); /* deallocate all remaining minimizers */
     return err;
 }
