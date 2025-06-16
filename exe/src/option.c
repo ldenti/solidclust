@@ -12,6 +12,7 @@ void init_options(option_t *const opts) {
     opts->k = 14;
     opts->w = 30;
     opts->canonical = 1;
+    opts->weighted = FALSE;
     opts->quality_threshold = 0.97;
     opts->similarity_threshold = 0.5;
     opts->post_cluster = 0.0;

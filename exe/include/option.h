@@ -10,6 +10,7 @@ typedef struct {
     unsigned char k;
     unsigned char w;
     unsigned char canonical;
+    unsigned char weighted;
     double quality_threshold;
     double similarity_threshold;
     double post_cluster;

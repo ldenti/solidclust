@@ -19,6 +19,12 @@ int cluster_reads(
     clusters_t *const clusters
 );
 
+int cluster_reads_weighted(
+    char const *const index_filename, 
+    const double similarity_threshold, 
+    clusters_t *const clusters
+);
+
 int cluster_postprocessing(
     const double merge_threhsold,
     clusters_t *const clusters

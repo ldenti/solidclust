@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
+#include <math.h>
 #define __USE_POSIX199309
 #include <time.h>
 #include "../../bundled/xoshiro/include/xoshiro256++.h"
@@ -32,12 +32,14 @@ int main(int argc, char **argv) {
     init_options(&opts);
     kv_init(clusters);
     if (!err) {
-        clock_gettime(CLOCK_MONOTONIC, &tstart);
+        /* clock_gettime(CLOCK_MONOTONIC, &tstart); */
         err = parse_options(argc, argv, &opts);
+        /* 
         clock_gettime(CLOCK_MONOTONIC, &tstop);
         wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
         wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
-        fprintf(stderr, "Options parsed in %llu us\n", wallclock_elapsed / RESOLUTION);
+        fprintf(stderr, "Options parsed in %llu us\n", wallclock_elapsed / RESOLUTION); 
+        */
     }
     if (!err) {
         clock_gettime(CLOCK_MONOTONIC, &tstart);
@@ -49,7 +51,8 @@ int main(int argc, char **argv) {
     }
     if (!err) {
         clock_gettime(CLOCK_MONOTONIC, &tstart);
-        err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, &clusters);
+        if (opts.weighted) err = cluster_reads_weighted(opts.tmp_filename, opts.similarity_threshold, &clusters);
+        else err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, &clusters);
         clock_gettime(CLOCK_MONOTONIC, &tstop);
         wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
         wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
@@ -87,6 +90,7 @@ int parse_options(int argc, char **argv, option_t *const opts) {
 		{ "bar", ko_required_argument, 302 },
 		{ "opt", ko_optional_argument, 303 }, */
         {"post-cluster", ko_required_argument, 301},
+        {"weighted", ko_no_argument, 302},
 		{NULL, 0, 0}
 	};
     static char const* const shortopts = "i:o:m:k:w:s:d:q:t:ch";
@@ -116,13 +120,13 @@ int parse_options(int argc, char **argv, option_t *const opts) {
                 if (strcmp(opt.arg, "ont") == 0) {
                     if (!k_explicit) opts->k = 13;
                     if (!w_explicit) opts->w = 21;
-                    if (!t1_explicit) opts->quality_threshold = 0.95;
+                    if (!t1_explicit) opts->quality_threshold = pow(0.95, opts->k);
                     if (!t2_explicit) opts->similarity_threshold = 0.5;
                     if (!post_explicit) opts->post_cluster = 0.5;
                 } else if (strcmp(opt.arg, "pacbio") == 0) {
                     if (!k_explicit) opts->k = 15;
                     if (!w_explicit) opts->w = 51;
-                    if (!t1_explicit) opts->quality_threshold = 0.98;
+                    if (!t1_explicit) opts->quality_threshold = pow(0.98, opts->k);
                     if (!t2_explicit) opts->similarity_threshold = 0.5;
                     if (!post_explicit) opts->post_cluster = 0.8;
                 } else {
@@ -174,6 +178,9 @@ int parse_options(int argc, char **argv, option_t *const opts) {
             case 301:
                 opts->post_cluster = strtod(opt.arg, NULL);
                 post_explicit = TRUE;
+                break;
+            case 302:
+                opts->weighted = TRUE;
                 break;
             case 'h':
                 print_usage(stdout);

@@ -66,6 +66,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* 
+Workaround if the compiler is new 
+https://stackoverflow.com/questions/74274179/i-cant-use-drand48-and-srand48-in-c
+*/
+#if !(_SVID_SOURCE || _XOPEN_SOURCE) && !defined(__APPLE__)
+static double drand48(void) {
+    return rand() / (RAND_MAX + 1.0);
+}
+#endif
+
 typedef struct {
 	void *left, *right;
 	int depth;

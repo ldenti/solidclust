@@ -37,11 +37,11 @@ int make_qual_filter(char const *const qual, const size_t seq_len, const uint8_t
     for (i = 0; i < seq_len; ++i) {
         buffer[i] = 1.0 - pow(10.0, -((int)qual[i] - 33) / 10);
     }
-    kv_reserve(unsigned char, *filter, seq_len);
+    kv_reserve(unsigned char, *filter, seq_len - k + 1);
     for (filter->n = 0; filter->n < seq_len - k + 1; ++filter->n) {
-        kmer_quality = 1;
+        kmer_quality = 1.0;
         for (i = 0; i < k; ++i) {
-            kmer_quality *= qual[filter->n + i];
+            kmer_quality *= buffer[filter->n + i];
         }
         filter->a[filter->n] = kmer_quality > threshold;
     }
