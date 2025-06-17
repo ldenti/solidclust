@@ -102,9 +102,6 @@ int sketch_reads_from_fastq(
             err = ERR_LOGIC;
         }
     }
-    for (i = 0; i < mmzers.n; ++i) {
-        fprintf(stderr, "%llu\n", mmzers.a[i]);
-    }
 #endif
     /* fprintf(stderr, "%llu total sketches, %llu total minimizers\n", lengths.n, mmzers.n); */
     oh = NULL;

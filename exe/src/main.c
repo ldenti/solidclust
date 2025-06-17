@@ -28,7 +28,10 @@ int main(int argc, char **argv) {
     clusters_t clusters;
     struct timespec tstart, tstop;
     unsigned long long wallclock_elapsed;
+    void *mm2clusters; /*.auxiliary information used by  */
+
     err = OK;
+    mm2clusters = NULL;
     init_options(&opts);
     kv_init(clusters);
     if (!err) {
@@ -52,7 +55,7 @@ int main(int argc, char **argv) {
     if (!err) {
         clock_gettime(CLOCK_MONOTONIC, &tstart);
         if (opts.weighted) err = cluster_reads_weighted(opts.tmp_filename, opts.similarity_threshold, &clusters);
-        else err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, &clusters);
+        else err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, &clusters, &mm2clusters);
         clock_gettime(CLOCK_MONOTONIC, &tstop);
         wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
         wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
@@ -60,7 +63,10 @@ int main(int argc, char **argv) {
     }
     if (!err) {
         clock_gettime(CLOCK_MONOTONIC, &tstart);
-        err = cluster_postprocessing(opts.post_cluster, &clusters);
+        if (opts.weighted) err = cluster_slow_postprocessing(opts.post_cluster, &clusters); /* TODO remove in final version */
+        else err = cluster_postprocessing(opts.post_cluster, &clusters, mm2clusters);
+        if (!err) err = minimizers_to_clusters_map_destroy(mm2clusters);
+        mm2clusters = NULL;
         clock_gettime(CLOCK_MONOTONIC, &tstop);
         wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
         wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
@@ -75,9 +81,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Cluster written in %llu us\n", wallclock_elapsed / RESOLUTION);
     }
     /* if (!err) err = cluster_print(&clusters); */
-    
     for (i = 0; i < clusters.n; ++i) {
         kv_destroy(clusters.a[i].ids);
+        kv_destroy(clusters.a[i].minimizers);
     }
     kv_destroy(clusters);
     destroy_options(&opts);
