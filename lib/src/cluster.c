@@ -258,6 +258,7 @@ int cluster_postprocessing(
     } while (!err && !kv_size(merge_into));
 
     kv_destroy(merge_into);
+    kh_foreach(cl_set_map, itr) kv_destroy(kh_val(cl_set_map, itr));
     clsm_destroy(cl_set_map);
     clss_destroy(small_hs);
     clss_destroy(not_large);
@@ -710,6 +711,7 @@ int apply_cluster_merging(
             }
         }
     }
+    kv_destroy(available);
     return err;
 }
 
