@@ -271,7 +271,8 @@ int cluster_postprocessing(
 
 int cluster_reads_weighted(
     char const *const index_filename, 
-    const double similarity_threshold, 
+    const double similarity_threshold,
+    const double weight_threshold,
     clusters_t *const clusters
 ) {
     /* typedef kvec_t(size_t) hitv_t; */
@@ -337,14 +338,14 @@ int cluster_reads_weighted(
         ++len_id;
     }
     for (i = 1; !err && i < nsketches; ++i) {
-        size_t read_size_weighted;
+        /* size_t read_size_weighted; */
         if (kv_capacity(hits) == clusters->n) kv_reserve(size_t, hits, 2*clusters->n);
         kv_resize(size_t, hits, clusters->n);
         assert(kv_size(hits) != 0);
         kv_reset(hits, 0);
         mm_itr = mm;
         kv_clear(buffer); /* buffer is to avoid reading multiple times from mapped memory */
-        read_size_weighted = 0;
+        /* read_size_weighted = 0; */
         for (j = 0; j < len_id->size; ++j) { /* for each minimizer in read */
             map_itr = mm2clsw_get(mm2clusters, *mm_itr);
             if (map_itr < kh_end(mm2clusters)) { /* minimizer already seen before */
@@ -354,11 +355,13 @@ int cluster_reads_weighted(
                     sum += kv_A(cluster_ids, k).count;
                 }
                 for (k = 0; k < cluster_ids.n; ++k) {
-                    kv_A(hits, kv_A(cluster_ids, k).cluster_id) += (double)kv_A(cluster_ids, k).count / sum;
-                    read_size_weighted += kv_A(cluster_ids, k).count;
+		  if ((double)kv_A(cluster_ids, k).count / sum >= weight_threshold) {
+                    kv_A(hits, kv_A(cluster_ids, k).cluster_id) += 1;
+		  }
+                    /* read_size_weighted += kv_A(cluster_ids, k).count; */
                 }
             } else {/* if new minimizers not seen before do nothing, just add 1 to size */
-                ++read_size_weighted;
+                /* ++read_size_weighted; */
             }
             kv_push(mm_t, buffer, *mm_itr);
             ++mm_itr;
@@ -373,7 +376,7 @@ int cluster_reads_weighted(
         }
         /* fprintf(stderr, "hits.size = %llu, best cluster id = %llu\n", kv_size(hits), best_cluster_idx); */
         ratio = (double)kv_A(hits, best_cluster_idx) / len_id->size;
-        /* fprintf(stderr, "%lf / %lu = %lf > %lf\n", (double)kv_A(hits, best_cluster_idx), len_id->size, (double)kv_A(hits, best_cluster_idx) /  len_id->size, similarity_threshold); */
+        /* printf("%lf / %lu = %lf > %lf\n", (double)kv_A(hits, best_cluster_idx), len_id->size, ratio, similarity_threshold); */
         if (ratio > similarity_threshold) { /* merge read into best cluster */
             kv_push(read_id_t, kv_A(*clusters, best_cluster_idx).ids, len_id->id); /* add read to cluster */
             for (j = 0; j < kv_size(buffer); ++j) { /* for the minimizers in read */

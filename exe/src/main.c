@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
     }
     if (!err) {
         clock_gettime(CLOCK_MONOTONIC, &tstart);
-        if (opts.weighted) err = cluster_reads_weighted(opts.tmp_filename, opts.similarity_threshold, &clusters);
+        if (opts.weighted) err = cluster_reads_weighted(opts.tmp_filename, opts.similarity_threshold, opts.weight_threshold, &clusters);
         else err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, &clusters, &mm2clusters);
         clock_gettime(CLOCK_MONOTONIC, &tstop);
         wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
@@ -96,7 +96,7 @@ int parse_options(int argc, char **argv, option_t *const opts) {
 		{ "bar", ko_required_argument, 302 },
 		{ "opt", ko_optional_argument, 303 }, */
         {"post-cluster", ko_required_argument, 301},
-        {"weighted", ko_no_argument, 302},
+        {"weighted", ko_required_argument, 302},
 		{NULL, 0, 0}
 	};
     static char const* const shortopts = "i:o:m:k:w:s:d:q:t:ch";
@@ -187,6 +187,7 @@ int parse_options(int argc, char **argv, option_t *const opts) {
                 break;
             case 302:
                 opts->weighted = TRUE;
+                opts->weight_threshold = strtod(opt.arg, NULL);
                 break;
             case 'h':
                 print_usage(stdout);

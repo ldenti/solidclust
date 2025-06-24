@@ -28,7 +28,8 @@ int cluster_postprocessing(
 
 int cluster_reads_weighted(
     char const *const index_filename, 
-    const double similarity_threshold, 
+    const double similarity_threshold,
+    const double weight_threshold,
     clusters_t *const clusters
 );
 

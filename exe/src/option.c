@@ -15,6 +15,7 @@ void init_options(option_t *const opts) {
     opts->weighted = FALSE;
     opts->quality_threshold = 0.97;
     opts->similarity_threshold = 0.5;
+    opts->weight_threshold = 0.2;
     opts->post_cluster = 0.0;
     opts->seed = 42;
     opts->tmp_filename_allocated = 0;
