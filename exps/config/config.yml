@@ -1,0 +1,5 @@
+fa: /home/ld/data/palss/chm13v2.0.fa
+samples:
+  ALZ: /home/ld/data/isonclust3.5/ALZ.100k.fq|pacbio
+  # b: .|2
+wd: WDWD

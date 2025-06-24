@@ -1,0 +1,156 @@
+# from snakemake.utils import min_version
+# min_version("6.4.1")
+from os.path import join as pjoin
+
+
+##### config file #####
+configfile: "config/config.yml"
+
+
+FA = config["fa"]
+FQs = config["samples"]
+for k, v in FQs.items():
+    v = v.split("|")
+    FQs[k] = {"fq": v[0], "st": v[1]}
+print(FQs)
+WD = config["wd"]
+
+Ts = [0.25, 0.5]
+Ws = [0, 0.1, 0.25, 0.33, 0.5, 0.9]
+
+
+rule all:
+    input:
+        expand(
+            pjoin(WD, "{sample}", "results.weighted.t{t}.w{w}.txt"),
+            sample=FQs,
+            t=Ts,
+            w=Ws,
+        ),
+        expand(
+            pjoin(WD, "{sample}", "results.remake.t{t}.w0.txt"),
+            sample=FQs,
+            t=Ts,
+        ),
+        expand(
+            pjoin(WD, "{sample}", "results.original.t{t}.w0.txt"),
+            sample=FQs,
+            t=Ts,
+        ),
+        # expand(pjoin(WD, "{sample}.bam"), sample=FQs),
+
+
+rule minimap2:
+    input:
+        fa=FA,
+        fq=lambda wildcards: FQs[wildcards.sample]["fq"],
+    output:
+        bam=pjoin(WD, "{sample}.bam"),
+    params:
+        mode=lambda wildcards: (
+            "splice:hq" if FQs[wildcards.sample]["st"] == "pacbio" else "splice"
+        ),
+    threads: workflow.cores
+    conda:
+        "envs/minimap2.yml"
+    shell:
+        """
+        minimap2 -t {threads} -ax {params.mode} --eqx {input.fa} {input.fq} | samtools view -bS | samtools sort > {output.bam}
+        samtools index {output.bam}
+        """
+
+
+rule isonclust3_remake:
+    input:
+        fq=lambda wildcards: FQs[wildcards.sample]["fq"],
+    output:
+        txt=pjoin(WD, "{sample}", "isonclust.remake.t{t}.w0.txt"),
+        tsv=pjoin(WD, "{sample}", "isonclust.remake.t{t}.w0.tsv"),
+    params:
+        mode=lambda wildcards: FQs[wildcards.sample]["st"],
+    log:
+        time=pjoin(WD, "logs", "{sample}", "isonclust.remake.t{t}.w0.time"),
+        stderr=pjoin(WD, "logs", "{sample}", "isonclust.remake.t{t}.w0.stderr"),
+    conda:
+        "envs/pylibs.yml"
+    threads: 1
+    shell:
+        """
+        /usr/bin/time -vo {log.time} ../build/isonclust -d {output.txt}.bin -m {params.mode} -t{wildcards.t} -i {input.fq} -o {output.txt} --post-cluster 0  2> {log.stderr}
+        python3 scripts/format_ioc35.py {input.fq} {output.txt} > {output.tsv}
+        """
+
+
+rule isonclust3_weighted:
+    input:
+        fq=lambda wildcards: FQs[wildcards.sample]["fq"],
+    output:
+        txt=pjoin(WD, "{sample}", "isonclust.weighted.t{t}.w{w}.txt"),
+        tsv=pjoin(WD, "{sample}", "isonclust.weighted.t{t}.w{w}.tsv"),
+    params:
+        mode=lambda wildcards: FQs[wildcards.sample]["st"],
+    log:
+        time=pjoin(WD, "logs", "{sample}", "isonclust.weighted.t{t}.w{w}.time"),
+        stderr=pjoin(WD, "logs", "{sample}", "isonclust.weighted.t{t}.w{w}.stderr"),
+    conda:
+        "envs/pylibs.yml"
+    threads: 1
+    shell:
+        """
+        /usr/bin/time -vo {log.time} ../build/isonclust -d {output.txt}.bin -m {params.mode} -t {wildcards.t} -i {input.fq} -o {output.txt} --weighted {wildcards.w} --post-cluster 0 2> {log.stderr}
+        python3 scripts/format_ioc35.py {input.fq} {output.txt} > {output.tsv}
+        """
+
+
+rule get_isonclust3:
+    output:
+        exe=pjoin(WD, "isonclust3", "target", "release", "isONclust3"),
+    params:
+        repo=pjoin(WD, "isonclust3"),
+    conda:
+        "./envs/rust.yml"
+    shell:
+        """
+        rm -rf {params.repo}
+        git clone https://github.com/aljpetri/isONclust3.git {params.repo}
+        cd {params.repo}
+        cargo build --release
+        """
+
+
+rule isonclust3:
+    input:
+        exe=rules.get_isonclust3.output.exe,
+        fq=lambda wildcards: FQs[wildcards.sample]["fq"],
+    output:
+        tsv=pjoin(WD, "{sample}", "isonclust.original.t{t}.w0.tsv"),
+    params:
+        tsv=pjoin(
+            WD, "{sample}", "isonclust3.t{t}.w0", "clustering", "final_clusters.tsv"
+        ),
+        d=pjoin(WD, "{sample}", "isonclust3.t{t}.w0"),
+        mode=lambda wildcards: FQs[wildcards.sample]["st"],
+    log:
+        time=pjoin(WD, "logs", "{sample}", "isonclust.original.t{t}.w0.time"),
+        stderr=pjoin(WD, "logs", "{sample}", "isonclust.original.t{t}.w0.stderr"),
+    threads: 8
+    shell:
+        """
+        /usr/bin/time -vo {log.time} {input.exe} --fastq {input.fq} --mode pacbio --min-shared-minis {wildcards.t} --outfolder {params.d} --no-fastq 2> {log.stderr}
+        mv {params.tsv} {output.tsv}
+        """
+
+
+rule analyze:
+    input:
+        bam=pjoin(WD, "{sample}.bam"),
+        tsv=pjoin(WD, "{sample}", "isonclust.{run}.t{t}.w{w}.tsv"),
+    output:
+        txt=pjoin(WD, "{sample}", "results.{run}.t{t}.w{w}.txt"),
+        log=pjoin(WD, "{sample}", "results.{run}.t{t}.w{w}.log"),
+    conda:
+        "envs/pylibs.yml"
+    shell:
+        """
+        python3 ./scripts/compute_cluster_quality.py --clusters {input.tsv} --classes {input.bam} --outfile {output.txt} &> {output.log}
+        """

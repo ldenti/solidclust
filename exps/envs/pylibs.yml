@@ -1,0 +1,10 @@
+name: pylibs
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - pysam
+  - biopython
+  - seaborn
+  - scikit-learn
+  - networkx
