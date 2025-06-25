@@ -152,7 +152,17 @@ int cluster_reads(
                 best_value = kv_A(hits, j);
             }
         }
-        /* fprintf(stderr, "hits.size = %llu, best cluster id = %llu\n", kv_size(hits), best_cluster_idx); */
+        /*
+        fprintf(stderr, "hits.size = %llu, best cluster id = %llu, val = %llu, len = %llu, ratio = %f, threshold = %f, %d\n", 
+            kv_size(hits), 
+            best_cluster_idx, 
+            kv_A(hits, best_cluster_idx), 
+            len_id->size, 
+            (double)kv_A(hits, best_cluster_idx) / len_id->size, 
+            similarity_threshold, 
+            (double)kv_A(hits, best_cluster_idx) / len_id->size > similarity_threshold
+        );
+        */
         if ((double)kv_A(hits, best_cluster_idx) / len_id->size > similarity_threshold) { /* merge read into best cluster */
             kv_push(read_id_t, kv_A(*clusters, best_cluster_idx).ids, len_id->id); /* add read to cluster */
             for (j = 0; j < kv_size(buffer); ++j) { /* for the minimizers in read */
@@ -241,12 +251,14 @@ int cluster_postprocessing(
     not_large = clss_init();
     kv_init(shared_seed_counts);
     kv_resize(size_t, shared_seed_counts, kv_size(*clusters));
-    for (i = 0; i < kv_size(shared_seed_counts); ++i) kv_A(shared_seed_counts, i) = 0;
     do {
         kv_clear(merge_into);
         clss_clear(small_hs);
         if (!err) err = generate_cluster_merging(cluster_map, cl_set_map);
-        if (!err) err = detect_overlaps(merge_threhsold, cluster_map, cl_set_map, &merge_into, small_hs, shared_seed_counts);
+        if (!err) {
+            for (i = 0; i < kv_size(shared_seed_counts); ++i) kv_A(shared_seed_counts, i) = 0;
+            err = detect_overlaps(merge_threhsold, cluster_map, cl_set_map, &merge_into, small_hs, shared_seed_counts);
+        }
         if (!err) err = apply_cluster_merging(clusters, cluster_map, cl_set_map, &merge_into, small_hs, not_large);
         for (i = 0, j = 0; i < kv_size(merge_into); ++i) {
             itr = clss_get(not_large, kv_A(merge_into, i).second);
@@ -285,7 +297,7 @@ int cluster_reads_weighted(
     cluster_t empty_cluster;
     size_t i, j, k, best_cluster_idx, best_value, back_idx, insertion_idx;
     mmv_t buffer;
-    hitdoublev_t hits;
+    hitv_t hits;
     mm2cluster_weighted_t *mm2clusters;
     khint_t map_itr;
     idw_t dummy;
@@ -595,8 +607,8 @@ int generate_cluster_merging(
 
 int detect_overlaps(
     const double merge_threhsold,
-    mm2cluster_t *const cluster_map,
-    cls_map_t *const cl_set_map,
+    mm2cluster_t *const cluster_map, /* map mm -> cluster id list */
+    cls_map_t *const cl_set_map, /* map cluster id -> mm list */
     clid_pairv_t *const merge_into,
     cls_set_t *const small_hs,
     const hitv_t shared_seed_counts /* pre-allocated by parent function: clusters.size() */
@@ -638,8 +650,9 @@ int detect_overlaps(
                     max_count = kv_A(shared_seed_counts, i);
                 }
             }
-            shared_perc = (double)kv_size(hashes) / max_count;
+            shared_perc = (double) max_count / kv_size(hashes);
             pos = clss_get(small_hs, max_cluster_id);
+            assert(shared_perc >=0 && shared_perc <= 1);
             if (shared_perc > merge_threhsold && pos == kh_end(small_hs)) {
                 clid_pair_t dummy;
                 assert(max_cluster_id < UINT32_MAX);
@@ -652,6 +665,7 @@ int detect_overlaps(
                     }
                 }
                 if (!contains) {
+                    fprintf(stderr, "kv_size(hashes) = %llu, kv_size(cl_set_amp) row = %llu\n", kv_size(hashes), kv_size(kh_val(cl_set_map, itr)));
                     assert(kv_size(hashes) <= kv_size(kh_val(cl_set_map, itr)));
                     if (kv_size(hashes) < kv_size(kh_val(cl_set_map, itr)) || dummy.first < max_cluster_id) {
                         dummy.second = max_cluster_id;

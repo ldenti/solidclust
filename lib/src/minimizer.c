@@ -27,10 +27,10 @@ void mm_hash_clear(mm_hash_t *h) {
     h->itself = 0;
 }
 
-void append_to_accumulator(mm_hash_t const *const mm, size_t idx, unsigned char const *const filter, mmv_t *accumulator) {
+void append_to_accumulator(mm_hash_t const *const mm, unsigned char const *const filter, mmv_t *accumulator) {
     assert(mm);
     assert(accumulator);
-    if (filter && !filter[idx]) return;
+    if (filter && !filter[mm->idx]) return;
     kv_push(mm_t, *accumulator, mm->itself);
 }
 
@@ -54,12 +54,15 @@ int minimizer_from_string(
     unsigned char z, find_brand_new_min;
     size_t i, j, buf_pos, min_pos;
     size_t nbases_since_last_break;
-    uint16_t shift, correction;
+    uint16_t shift;
     uint64_t mask;
     uint64_t km[2];
     mm_hash_t current;
     mm_hash_t *buffer;
     assert(seq);
+    assert(seq_len > k + w);
+    assert(k > 0);
+    assert(w > 0);
     assert(accumulator);
     err = OK;
     shift = 2 * (k - 1);
@@ -82,6 +85,7 @@ int minimizer_from_string(
             if (nbases_since_last_break >= k) {
                 current.itself = km[z];
                 current.hash = XXH64(&km[z], sizeof(km[z]), seed);
+                current.idx = i - k;
                 if (nbases_since_last_break == k + w - 1) {
                     /* have seen the first window after a break, time to search for the minimum. note that the current k-mer is checked by the next if */
                     min_pos = 0;
@@ -89,13 +93,10 @@ int minimizer_from_string(
                 }
                 if (nbases_since_last_break >= k + w) {  /* time to update the minimum, if necessary */
                     if (buf_pos % w == min_pos) {  /* old minimum outside window */
-                        append_to_accumulator(&buffer[min_pos], i - (k + w) + 1, filter, accumulator);  /* we save the old minimum, we know it is w + k bases behind current read base */
+                        append_to_accumulator(&buffer[min_pos], filter, accumulator);  /* we save the old minimum, we know it is w + k bases behind current read base */
                         find_brand_new_min = TRUE;
                     } else if (current.hash < buffer[min_pos].hash) {
-                        correction = k + get_shift(w, buf_pos, min_pos); /* NOTE: there is no -1 since buf_pos is yet to be updated */
-                        /* fprintf(stderr, "%llu, %llu, %llu, %llu, %llu, %llu\n", seq_len - k + 1, i, correction, buf_pos, min_pos, i - correction); */
-                        assert(i - correction < seq_len - k + 1);
-                        append_to_accumulator(&buffer[min_pos], i - correction, filter, accumulator);
+                        append_to_accumulator(&buffer[min_pos], filter, accumulator);
                         min_pos = buf_pos;  /* actual update is outside if */
                     }
                 }
@@ -110,11 +111,7 @@ int minimizer_from_string(
             }
         } else {
             nbases_since_last_break = 0;
-            if (min_pos < w) {
-                correction = (k + get_shift(w, buf_pos, min_pos));
-                assert(i - correction < seq_len - k + 1);
-                append_to_accumulator(&buffer[min_pos], i - correction, filter, accumulator); /* push current minimum if available */
-            }
+            if (min_pos < w) append_to_accumulator(&buffer[min_pos], filter, accumulator); /* push current minimum if available */
             min_pos = w;
             buf_pos = 0; /* is it still needed ? */
             /* 
@@ -123,18 +120,16 @@ int minimizer_from_string(
             */
         }
     }
-    if (nbases_since_last_break == k) {  /* contig.length == 1 */
+    /*
+    if (nbases_since_last_break == k) {
         for (j = 0; j < w; ++j) {
             if (buffer[j].hash < buffer[min_pos].hash) {
                 min_pos = j;
             }
         }
     }
-    if (i != 0 && min_pos < w) {
-        correction = k + get_shift(w, buf_pos, min_pos) - 1; /* NOTE: here buf_pos was updated before exiting the main loop, so -1*/
-        assert(i - correction < seq_len - k + 1);
-        append_to_accumulator(&buffer[min_pos], i - correction, filter, accumulator);  /* push last minimum if available */
-    }
+    */
+    if (i != 0 && min_pos < w) append_to_accumulator(&buffer[min_pos], filter, accumulator);  /* push last minimum if available */
     if (buffer) free(buffer);
     return err;
 }
