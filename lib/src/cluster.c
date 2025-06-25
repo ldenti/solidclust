@@ -355,9 +355,9 @@ int cluster_reads_weighted(
                     sum += kv_A(cluster_ids, k).count;
                 }
                 for (k = 0; k < cluster_ids.n; ++k) {
-		  if ((double)kv_A(cluster_ids, k).count / sum >= weight_threshold) {
-                    kv_A(hits, kv_A(cluster_ids, k).cluster_id) += 1;
-		  }
+                    if ((double)kv_A(cluster_ids, k).count / sum >= weight_threshold) {
+                                kv_A(hits, kv_A(cluster_ids, k).cluster_id) += 1;
+                    }
                     /* read_size_weighted += kv_A(cluster_ids, k).count; */
                 }
             } else {/* if new minimizers not seen before do nothing, just add 1 to size */
@@ -410,7 +410,7 @@ int cluster_reads_weighted(
             assert(back_idx != SIZE_MAX);
             kv_reserve(mm_t, kv_A(*clusters, back_idx).minimizers, len_id->size);
             assert(clusters->a[back_idx].minimizers.a);
-            if (!err && memcpy(kv_A(*clusters, back_idx).minimizers.a, mm, len_id->size * sizeof(mm_t)) != kv_A(*clusters, back_idx).minimizers.a) err = ERR_RUNTIME;
+            if (!err && memcpy(kv_A(*clusters, back_idx).minimizers.a, buffer.a, len_id->size * sizeof(mm_t)) != kv_A(*clusters, back_idx).minimizers.a) err = ERR_RUNTIME;
             if (!err) kv_A(*clusters, back_idx).minimizers.n = len_id->size;
             if (!err) kv_push(read_id_t, kv_A(*clusters, back_idx).ids, len_id->id);
 
