@@ -65,7 +65,7 @@ int sketch_reads_from_fastq(
     mmv_t mmzers; /* concatenation of minimizer representation of each read */
     lv_t lengths;
     qfilter_t quality_filter;
-    size_t i, read_id;
+    size_t i, j, read_id;
     uint64_t cumulative_count;
     size_id_handle handle;
     int err;
@@ -85,16 +85,29 @@ int sketch_reads_from_fastq(
         handle.metadata.id = read_id;
         handle.metadata.size = mmzers.n - cumulative_count;
         handle.sketch_offset = cumulative_count;
-        if (!err && handle.metadata.size > 0) ks_introsort(minimizer, handle.metadata.size, mmzers.a + cumulative_count);
+        if (!err && handle.metadata.size > 0) {
+            ks_introsort(minimizer, handle.metadata.size, mmzers.a + cumulative_count);
+            for (i = 0, j = 0; i < handle.metadata.size; ++i) {
+                if (mmzers.a[cumulative_count + i] != mmzers.a[cumulative_count + j]) {
+                    ++j;
+                    assert(j <= i);
+                    mmzers.a[cumulative_count + j] = mmzers.a[cumulative_count + i];
+                }
+            }
+            handle.metadata.size = ++j; /* j points to the most recently inserted item, so size is j + 1 */
+        }
         kv_push(size_id_handle, lengths, handle);
+        mmzers.n = cumulative_count + handle.metadata.size; /* resize mmzers to its new length without duplicates */
         cumulative_count = mmzers.n;
         ++read_id;
     }
     kv_destroy(quality_filter);
     if (seq) kseq_destroy(seq);
     if (fp) gzclose(fp);
+
     assert(lengths.n == read_id);
-    radix_sort_sketch_size(lengths.a, lengths.a + lengths.n); /* sort by decreasing length sizes */
+
+    radix_sort_sketch_size(lengths.a, lengths.a + lengths.n); /* sort by increasing length sizes */
 #ifndef NDEBUG
     if (lengths.n > 0) for (i = 0; !err && i < lengths.n - 1; ++i) {
         if (kv_A(lengths, i).metadata.size > kv_A(lengths, i + 1).metadata.size) {
