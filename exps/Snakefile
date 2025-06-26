@@ -15,7 +15,7 @@ for k, v in FQs.items():
 print(FQs)
 WD = config["wd"]
 
-Ts = [0.25, 0.5]
+Ts = [0.1, 0.25, 0.5, 0.75]
 Ws = [0, 0.1, 0.25, 0.33, 0.5, 0.9]
 
 
@@ -47,15 +47,15 @@ rule minimap2:
     output:
         bam=pjoin(WD, "{sample}.bam"),
     params:
-        mode=lambda wildcards: (
-            "splice:hq" if FQs[wildcards.sample]["st"] == "pacbio" else "splice"
+        args=lambda wildcards: (
+            "-x splice:hq -uf -k 15 -w 5" if FQs[wildcards.sample]["st"] == "pacbio" else "-x splice -uf -k 13 -w 4"
         ),
     threads: workflow.cores
     conda:
         "envs/minimap2.yml"
     shell:
         """
-        minimap2 -t {threads} -ax {params.mode} --eqx {input.fa} {input.fq} | samtools view -bS | samtools sort > {output.bam}
+        minimap2 -t {threads} -a --eqx {params.args} {input.fa} {input.fq} | samtools view -bS | samtools sort > {output.bam}
         samtools index {output.bam}
         """
 

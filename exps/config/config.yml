@@ -1,5 +1,5 @@
 fa: /home/ld/data/palss/chm13v2.0.fa
 samples:
-  ALZ: /home/ld/data/isonclust3.5/ALZ.100k.fq|pacbio
-  # b: .|2
-wd: WDWD
+  ONT: /home/ld/data/isonclust3.5/SRR32934174.fastq|ont
+  PB: /home/ld/data/isonclust3.5/SRR33026141.fastq|pacbio
+wd: /home/ld/data/isonclust3.5/SMK-OUT
