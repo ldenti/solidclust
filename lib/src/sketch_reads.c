@@ -79,6 +79,10 @@ int sketch_reads_from_fastq(
     read_id = 0;
     cumulative_count = 0;
     while(!err && kseq_read(seq) >= 0) {
+        if (seq->seq.l < k) { /* TODO: add min read length to CLI */
+            ++read_id;
+            continue;
+        }
         if (!err && seq->seq.l != seq->qual.l) err = ERR_RUNTIME;
         if (!err) err = make_qual_filter(seq->qual.s, seq->qual.l, k, quality_threshold, &quality_filter);
         if (!err) err = minimizer_from_string(seq->seq.s, quality_filter.a, seq->seq.l, k, w, canonical, seed, &mmzers); /* this appends new minimizers to end of mmzers */
@@ -105,7 +109,7 @@ int sketch_reads_from_fastq(
     if (seq) kseq_destroy(seq);
     if (fp) gzclose(fp);
 
-    assert(lengths.n == read_id);
+    /* assert(lengths.n == read_id); */
 
     radix_sort_sketch_size(lengths.a, lengths.a + lengths.n); /* sort by increasing length sizes */
 #ifndef NDEBUG
