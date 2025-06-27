@@ -111,12 +111,10 @@ int main() {
 
 #define kv_resize(type, v, s)\
 	do {\
-	if (kv_capacity(v) < s) {\
-		if (kv_size(v) >= kv_capacity(v)) {\
+		if (kv_capacity(v) < s) {\
 			kv_reserve(type, v, s);\
 		}\
-	}\
-	(v).n = s;\
+		(v).n = s;\
 	} while(0)
 
 #endif

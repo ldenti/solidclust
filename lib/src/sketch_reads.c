@@ -25,27 +25,31 @@ KSORT_INIT(minimizer, mm_t, cmp)
 
 typedef kvec_t(unsigned char) qfilter_t;
 
-int make_qual_filter(char const *const qual, const size_t seq_len, const uint8_t k, const double threshold, qfilter_t *const filter) {
+typedef kvec_t(double) buffer_t;
+
+int make_qual_filter(char const *const qual, const size_t seq_len, const uint8_t k, const double threshold, buffer_t *const buffer, qfilter_t *const filter) {
     int err;
     size_t i;
-    double *buffer, kmer_quality;
+    double kmer_quality;
     assert(qual);
     assert(filter);
     err = OK;
-    buffer = NULL;
-    if (!err && (buffer = malloc(seq_len * sizeof(double))) == NULL) err = ERR_MALLOC;
+    /* buffer = NULL; */
+    /* if (!err && (buffer = malloc(seq_len * sizeof(double))) == NULL) err = ERR_MALLOC; */
+    kv_resize(double, *buffer, seq_len);
     for (i = 0; i < seq_len; ++i) {
-        buffer[i] = 1.0 - pow(10.0, -((int)qual[i] - 33) / 10);
+        kmer_quality = -((int)qual[i] - 33); /* tmp variable */
+        kv_A(*buffer, i) = 1.0 - pow(10.0, (double)kmer_quality / 10.0);
     }
     kv_reserve(unsigned char, *filter, seq_len - k + 1);
     for (filter->n = 0; filter->n < seq_len - k + 1; ++filter->n) {
         kmer_quality = 1.0;
         for (i = 0; i < k; ++i) {
-            kmer_quality *= buffer[filter->n + i];
+            kmer_quality *= kv_A(*buffer, filter->n + i);
         }
         filter->a[filter->n] = kmer_quality > threshold;
     }
-    if (buffer) free(buffer);
+    /* if (buffer) free(buffer); */
     assert(seq_len < k || filter->n == seq_len - k + 1);
     return err;
 }
@@ -65,17 +69,21 @@ int sketch_reads_from_fastq(
     mmv_t mmzers; /* concatenation of minimizer representation of each read */
     lv_t lengths;
     qfilter_t quality_filter;
+    buffer_t buffer;
     size_t i, j, read_id;
     uint64_t cumulative_count;
     size_id_handle handle;
     int err;
+
     assert(input_fastq);
+
     err = OK;
-    kv_init(mmzers);
     if (!err && !(fp = gzopen(input_fastq, "r"))) err = ERR_FILE;
     if (!err && !(seq = kseq_init(fp))) err = ERR_MALLOC;
+    kv_init(mmzers);
     kv_init(quality_filter);
     kv_init(lengths);
+    kv_init(buffer);
     read_id = 0;
     cumulative_count = 0;
     while(!err && kseq_read(seq) >= 0) {
@@ -84,7 +92,7 @@ int sketch_reads_from_fastq(
             continue;
         }
         if (!err && seq->seq.l != seq->qual.l) err = ERR_RUNTIME;
-        if (!err) err = make_qual_filter(seq->qual.s, seq->qual.l, k, quality_threshold, &quality_filter);
+        if (!err) err = make_qual_filter(seq->qual.s, seq->qual.l, k, quality_threshold, &buffer, &quality_filter);
         if (!err) err = minimizer_from_string(seq->seq.s, quality_filter.a, seq->seq.l, k, w, canonical, seed, &mmzers); /* this appends new minimizers to end of mmzers */
         handle.metadata.id = read_id;
         handle.metadata.size = mmzers.n - cumulative_count;
@@ -106,6 +114,7 @@ int sketch_reads_from_fastq(
         ++read_id;
     }
     kv_destroy(quality_filter);
+    kv_destroy(buffer);
     if (seq) kseq_destroy(seq);
     if (fp) gzclose(fp);
 
