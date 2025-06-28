@@ -134,7 +134,7 @@ int parse_options(int argc, char **argv, option_t *const opts) {
                 if (strcmp(opt.arg, "ont") == 0) {
                     if (!k_explicit) opts->k = 13;
                     if (!w_explicit) opts->w = 21;
-                    if (!t1_explicit) opts->quality_threshold = pow(0.95, opts->k);
+                    if (!t1_explicit) opts->quality_threshold = pow(0.90, opts->k);
                     if (!t2_explicit) opts->similarity_threshold = 0.5;
                     if (!post_explicit) opts->post_cluster = 0.5;
                 } else if (strcmp(opt.arg, "pacbio") == 0) {
