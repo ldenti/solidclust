@@ -4,7 +4,7 @@
 #define FALSE 0
 #define TRUE 1
 
-#define NDEBUG
+/* #define NDEBUG */
 
 enum exception_t {
     OK = 0,

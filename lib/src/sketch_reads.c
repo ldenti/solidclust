@@ -27,20 +27,25 @@ typedef kvec_t(unsigned char) qfilter_t;
 
 typedef kvec_t(double) buffer_t;
 
+double error_prob(char Q) {
+    double tmp;
+    tmp = ((int)Q - 33);
+    return pow(10.0, - ((double)tmp) / 10.0);
+}
+
 int make_qual_filter(char const *const qual, const size_t seq_len, const uint8_t k, const double threshold, buffer_t *const buffer, qfilter_t *const filter) {
     int err;
     size_t i;
     double kmer_quality;
     assert(qual);
     assert(filter);
+    assert(error_prob('!') == 1.0);
     err = OK;
-    /* buffer = NULL; */
-    /* if (!err && (buffer = malloc(seq_len * sizeof(double))) == NULL) err = ERR_MALLOC; */
     kv_resize(double, *buffer, seq_len);
     for (i = 0; i < seq_len; ++i) {
-        kmer_quality = -((int)qual[i] - 33); /* tmp variable */
-        kv_A(*buffer, i) = 1.0 - pow(10.0, (double)kmer_quality / 10.0);
+        kv_A(*buffer, i) = 1.0 - error_prob(qual[i]);
     }
+
     kv_reserve(unsigned char, *filter, seq_len - k + 1);
     for (filter->n = 0; filter->n < seq_len - k + 1; ++filter->n) {
         kmer_quality = 1.0;
@@ -49,7 +54,6 @@ int make_qual_filter(char const *const qual, const size_t seq_len, const uint8_t
         }
         filter->a[filter->n] = kmer_quality > threshold;
     }
-    /* if (buffer) free(buffer); */
     assert(seq_len < k || filter->n == seq_len - k + 1);
     return err;
 }
@@ -75,8 +79,10 @@ int sketch_reads_from_fastq(
     size_id_handle handle;
     int err;
     /* */
-    /* char **qnames = malloc(16384 * sizeof(char *)); */
-    /* int qnames_m = 16384; */
+    /* 
+    char **qnames = malloc(16384 * sizeof(char *));
+    int qnames_m = 16384; 
+    */
 
     assert(input_fastq);
 
@@ -90,13 +96,15 @@ int sketch_reads_from_fastq(
     read_id = 0;
     cumulative_count = 0;
     while(!err && kseq_read(seq) >= 0) {
-      /* if (read_id == qnames_m) { */
-      /* 	qnames = realloc(qnames, 2*qnames_m*sizeof(char *)); */
-      /* 	qnames_m *= 2; */
-      /* } */
-      /* qnames[read_id] = malloc((seq->name.l + 1) * sizeof(char)); */
-      /* strncpy(qnames[read_id], seq->name.s, seq->name.l); */
-      /* qnames[read_id][seq->name.l] = '\0'; */
+        /* 
+        if (read_id == qnames_m) { 	
+            qnames = realloc(qnames, 2*qnames_m*sizeof(char *));
+            qnames_m *= 2; 
+        } 
+        qnames[read_id] = malloc((seq->name.l + 1) * sizeof(char));
+        strncpy(qnames[read_id], seq->name.s, seq->name.l);
+        qnames[read_id][seq->name.l] = '\0'; 
+        */
 
         if (seq->seq.l < k) { /* TODO: add min read length to CLI */
             ++read_id;
@@ -131,23 +139,18 @@ int sketch_reads_from_fastq(
 
     /* assert(lengths.n == read_id); */
 
-    radix_sort_sketch_size(lengths.a, lengths.a + lengths.n); /* sort by increasing length sizes */
-    for (i = 0; i < (lengths.n >> 1); ++i) {
-        size_id_handle tmp = lengths.a[lengths.n - 1 - i];
-        lengths.a[lengths.n - 1 - i] = lengths.a[i];
-        lengths.a[i] = tmp;
+    radix_sort_sketch_size(lengths.a, lengths.a + lengths.n); /* Sort by increasing length sizes. Decreasing order is done when saving to disk */
+    /*
+    for(i = 0; i < lengths.n -1; ++i) {
+       fprintf(stderr, "SKETCH - %s %d\n", qnames[kv_A(lengths, i).metadata.id], kv_A(lengths, i).metadata.size);
     }
-
-    /* for(i = 0; i < lengths.n -1; ++i) { */
-    /*   fprintf(stderr, "SKETCH - %s %d\n", qnames[kv_A(lengths, i).metadata.id], kv_A(lengths, i).metadata.size); */
-    /* } */
-    /* for (i = 0; i<read_id; ++i) */
-    /*   free(qnames[i]); */
-    /* free(qnames); */
+    for (i = 0; i < read_id; ++i) free(qnames[i]);
+    free(qnames);
+    */
 
 #ifndef NDEBUG
     if (lengths.n > 0) for (i = 0; !err && i < lengths.n - 1; ++i) {
-        if (kv_A(lengths, i).metadata.size < kv_A(lengths, i + 1).metadata.size) {
+        if (kv_A(lengths, i).metadata.size > kv_A(lengths, i + 1).metadata.size) {
             fprintf(stderr, "[sketch_reads] lengths are not stored in increasing order\n");
             err = ERR_LOGIC;
         }
@@ -160,6 +163,8 @@ int sketch_reads_from_fastq(
     if (!err && fwrite(&cumulative_count, sizeof(cumulative_count), 1, oh) != 1) err = ERR_IO;
     /* fprintf(stderr, "[write] nsketches: %llu\n", cumulative_count); */
     cumulative_count = 0;
+
+    /* ATTENTION: the following loop is in reverse order to save sketches from LONGEST to SHORTEST */
     for (i = lengths.n - 1; !err && i != SIZE_MAX; --i) { /* write cumulative lengths */
         if (fwrite(&lengths.a[i].metadata, sizeof(sketch_metadata_t), 1, oh) != 1) err = ERR_IO;
     }

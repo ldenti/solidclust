@@ -83,6 +83,9 @@ int cluster_reads(
     mmv_t buffer;
     hitv_t hits;
     khint_t map_itr;
+#ifndef NDEBUG
+    size_t prev_size; /* decreasing order check */
+#endif
 
     assert(index_filename);
     assert(clusters);
@@ -93,6 +96,9 @@ int cluster_reads(
     kv_init(buffer);
     kv_init(hits);
     mm2clusters = mm2cls_init();
+#ifndef NDEBUG
+    prev_size = SIZE_MAX;
+#endif
 
     /* memory map index file */
     if (!err && (fd = open(index_filename, O_RDWR)) < 0) {
@@ -110,6 +116,9 @@ int cluster_reads(
         nsketches = *((uint64_t*)index);
         len_id = (sketch_metadata_t*)(index + sizeof(nsketches)); /* init iterator to start of metadata */
         mm = (mm_t*)(index + sizeof(nsketches) + nsketches * sizeof(sketch_metadata_t)); /* jump to start of sketches */
+#ifndef NDEBUG
+        prev_size = len_id->size;
+#endif
         /* load first read as first cluster */
         kv_init(*clusters);
         kv_push(cluster_t, *clusters, empty_cluster);
@@ -203,7 +212,11 @@ int cluster_reads(
             }
         }
         mm += len_id->size;
+        assert(prev_size >= len_id->size); /* check decreasing order of sketch sizes */
         ++len_id;
+#ifndef NDEBUG
+        prev_size = len_id->size;
+#endif  
     }
     
     kv_destroy(empty_cluster.minimizers);
