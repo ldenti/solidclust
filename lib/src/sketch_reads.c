@@ -74,6 +74,9 @@ int sketch_reads_from_fastq(
     uint64_t cumulative_count;
     size_id_handle handle;
     int err;
+    /* */
+    /* char **qnames = malloc(16384 * sizeof(char *)); */
+    /* int qnames_m = 16384; */
 
     assert(input_fastq);
 
@@ -87,6 +90,14 @@ int sketch_reads_from_fastq(
     read_id = 0;
     cumulative_count = 0;
     while(!err && kseq_read(seq) >= 0) {
+      /* if (read_id == qnames_m) { */
+      /* 	qnames = realloc(qnames, 2*qnames_m*sizeof(char *)); */
+      /* 	qnames_m *= 2; */
+      /* } */
+      /* qnames[read_id] = malloc((seq->name.l + 1) * sizeof(char)); */
+      /* strncpy(qnames[read_id], seq->name.s, seq->name.l); */
+      /* qnames[read_id][seq->name.l] = '\0'; */
+
         if (seq->seq.l < k) { /* TODO: add min read length to CLI */
             ++read_id;
             continue;
@@ -121,9 +132,22 @@ int sketch_reads_from_fastq(
     /* assert(lengths.n == read_id); */
 
     radix_sort_sketch_size(lengths.a, lengths.a + lengths.n); /* sort by increasing length sizes */
+    for (i = 0; i < (lengths.n >> 1); ++i) {
+        size_id_handle tmp = lengths.a[lengths.n - 1 - i];
+        lengths.a[lengths.n - 1 - i] = lengths.a[i];
+        lengths.a[i] = tmp;
+    }
+
+    /* for(i = 0; i < lengths.n -1; ++i) { */
+    /*   fprintf(stderr, "SKETCH - %s %d\n", qnames[kv_A(lengths, i).metadata.id], kv_A(lengths, i).metadata.size); */
+    /* } */
+    /* for (i = 0; i<read_id; ++i) */
+    /*   free(qnames[i]); */
+    /* free(qnames); */
+
 #ifndef NDEBUG
     if (lengths.n > 0) for (i = 0; !err && i < lengths.n - 1; ++i) {
-        if (kv_A(lengths, i).metadata.size > kv_A(lengths, i + 1).metadata.size) {
+        if (kv_A(lengths, i).metadata.size < kv_A(lengths, i + 1).metadata.size) {
             fprintf(stderr, "[sketch_reads] lengths are not stored in increasing order\n");
             err = ERR_LOGIC;
         }
