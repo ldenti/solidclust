@@ -44,6 +44,14 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Options parsed in %llu us\n", wallclock_elapsed / RESOLUTION); 
         */
     }
+
+    fprintf(stderr, "\n=== Parameters:\n");
+    /* fprintf(stderr, "---     k: %ld\n", opts.k); */
+    /* fprintf(stderr, "---     w: %ld\n", opts.w); */
+    fprintf(stderr, "---     q: %lf\n", opts.quality_threshold);
+    fprintf(stderr, "---     t: %lf\n", opts.similarity_threshold);
+    fprintf(stderr, "---     w: %lf\n", opts.weight_threshold);
+    fprintf(stderr, "===\n\n");
     if (!err) {
         clock_gettime(CLOCK_MONOTONIC, &tstart);
         err = sketch_reads_from_fastq(opts.input_fastq, opts.k, opts.w, opts.canonical, opts.seed, opts.quality_threshold, opts.tmp_filename);
