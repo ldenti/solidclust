@@ -7,6 +7,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#define __USE_POSIX199309
+#include <time.h>
 #include "../../bundled/klib/include/ksort.h"
 #include "../../bundled/khashl/include/khashl.h"
 #include "../include/exception.h"
@@ -315,6 +317,8 @@ int cluster_reads_weighted(
     khint_t map_itr;
     idw_t dummy;
     double ratio;
+    struct timespec tstart, tstop;
+    unsigned long long wallclock_elapsed;
 
     assert(index_filename);
     assert(clusters);
@@ -337,7 +341,8 @@ int cluster_reads_weighted(
     }
     if (!err && (index = mmap(NULL, filestat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED) err = ERR_FILE;
     /* keep 2 pointers: cumulative sum of lengths and current sketch */
-    
+
+    clock_gettime(CLOCK_MONOTONIC, &tstart);
     if (!err) {
         nsketches = *((uint64_t*)index);
         len_id = (sketch_metadata_t*)(index + sizeof(nsketches)); /* init iterator to start of metadata */
@@ -363,6 +368,11 @@ int cluster_reads_weighted(
         ++len_id;
     }
     for (i = 1; !err && i < nsketches; ++i) {
+        if (i % 50000 == 0) {
+            clock_gettime(CLOCK_MONOTONIC, &tstop);
+	    wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
+	    fprintf(stderr, "Clustered %d/%d reads in %llu s. Total clusters: %d\n", i, nsketches, wallclock_elapsed / RESOLUTION, kv_size(*clusters));
+        }
         /* size_t read_size_weighted; */
         if (kv_capacity(hits) == clusters->n) kv_reserve(size_t, hits, 2*clusters->n);
         kv_resize(size_t, hits, clusters->n);
@@ -442,17 +452,23 @@ int cluster_reads_weighted(
             for (j = 0; j < kv_size(buffer); ++j) { /* for the minimizers in read */
                 minimizer = kv_A(buffer, j);
                 map_itr = mm2clsw_put(mm2clusters, minimizer, &absent);
+		
                 if (absent) { /* new minimizers not seen before */
                     kv_init(kh_val(mm2clusters, map_itr));
                 }
                 dummy.cluster_id = kv_size(*clusters) - 1;
                 dummy.count = 1; 
                 kv_push(idw_t, kh_val(mm2clusters, map_itr), dummy);
+		/* fprintf(stderr, "(%ld : %ld : %ld) Cluster size: %ld\n", j, map_itr, minimizer, kh_val(mm2clusters, map_itr).n); */
             }
         }
         mm += len_id->size;
         ++len_id;
     }
+
+    clock_gettime(CLOCK_MONOTONIC, &tstop);
+    wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
+    fprintf(stderr, "Clustered %d/%d reads in %llu s. Total clusters: %d\n", i, nsketches, wallclock_elapsed / RESOLUTION, kv_size(*clusters));
     
     kv_destroy(empty_cluster.minimizers);
     kv_destroy(empty_cluster.ids);

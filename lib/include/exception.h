@@ -4,7 +4,11 @@
 #define FALSE 0
 #define TRUE 1
 
-/* #define NDEBUG */
+#define NS_IN_SEC (1000 * 1000 * 1000)
+#define NS_IN_USEC 1000
+#define RESOLUTION NS_IN_SEC
+
+#define NDEBUG
 
 enum exception_t {
     OK = 0,
