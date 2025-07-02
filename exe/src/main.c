@@ -58,8 +58,7 @@ int main(int argc, char **argv) {
     }
     if (!err) {
         clock_gettime(CLOCK_MONOTONIC, &tstart);
-        if (opts.weighted) err = cluster_reads_weighted(opts.tmp_filename, opts.similarity_threshold, opts.weight_threshold, &clusters);
-        else err = cluster_reads(opts.tmp_filename, opts.similarity_threshold, &clusters, &mm2clusters);
+        cluster_reads_weighted(opts.tmp_filename, opts.similarity_threshold, opts.weight_threshold, &clusters);
         clock_gettime(CLOCK_MONOTONIC, &tstop);
         wallclock_elapsed = (tstop.tv_sec - tstart.tv_sec) * NS_IN_SEC;
         wallclock_elapsed += tstop.tv_nsec - tstart.tv_nsec;
@@ -67,8 +66,10 @@ int main(int argc, char **argv) {
     }
     if (!err) {
         clock_gettime(CLOCK_MONOTONIC, &tstart);
-        if (opts.weighted) err = cluster_slow_postprocessing(opts.post_cluster, &clusters); /* TODO remove in final version */
-        else err = cluster_postprocessing(opts.post_cluster, &clusters, mm2clusters);
+        /* TODO write post-clustering for weighted variant, which is now default
+        if (opts.weighted) err = cluster_slow_postprocessing(opts.post_cluster, &clusters);
+        else err = cluster_postprocessing(opts.post_cluster, &clusters, mm2clusters); 
+        */
         if (!err) err = minimizers_to_clusters_map_destroy(mm2clusters);
         mm2clusters = NULL;
         clock_gettime(CLOCK_MONOTONIC, &tstop);
@@ -190,7 +191,6 @@ int parse_options(int argc, char **argv, option_t *const opts) {
                 post_explicit = TRUE;
                 break;
             case 302:
-                opts->weighted = TRUE;
                 opts->weight_threshold = strtod(opt.arg, NULL);
                 break;
             case 'h':

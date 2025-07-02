@@ -118,6 +118,7 @@ int sketch_reads_from_fastq(
         handle.sketch_offset = cumulative_count;
         if (!err && handle.metadata.size > 0) {
             ks_introsort(minimizer, handle.metadata.size, mmzers.a + cumulative_count);
+            /* fprintf(stderr, "found %llu minimizers (with repetitions)\n", handle.metadata.size); */
             for (i = 0, j = 0; i < handle.metadata.size; ++i) {
                 if (mmzers.a[cumulative_count + i] != mmzers.a[cumulative_count + j]) {
                     ++j;
