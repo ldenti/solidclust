@@ -134,7 +134,7 @@ int cluster_reads_weighted(
     void *index;
     sketch_metadata_t *len_id;
     mm_t *mm, *mm_itr, minimizer;
-    uint64_t nsketches;
+    uint64_t nsketches = 0;
     cluster_t empty_cluster;
     size_t i, j, k, best_cluster_idx, best_value, back_idx, insertion_idx;
     mmv_t buffer;
