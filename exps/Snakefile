@@ -40,6 +40,7 @@ rule all:
         # expand(pjoin(WD, "{sample}.bam"), sample=FQs),
 
 
+# As in isonclust3 experiments
 rule minimap2:
     input:
         fa=FA,
@@ -48,7 +49,9 @@ rule minimap2:
         bam=pjoin(WD, "{sample}.bam"),
     params:
         args=lambda wildcards: (
-            "-x splice:hq -uf -k 15 -w 5" if FQs[wildcards.sample]["st"] == "pacbio" else "-x splice -uf -k 13 -w 4"
+            "-x splice:hq -uf -k 15 -w 5"
+            if FQs[wildcards.sample]["st"] == "pacbio"
+            else "-x splice -uf -k 13 -w 4"
         ),
     threads: workflow.cores
     conda:
@@ -133,10 +136,10 @@ rule isonclust3:
     log:
         time=pjoin(WD, "logs", "{sample}", "isonclust.original.t{t}.w0.time"),
         stderr=pjoin(WD, "logs", "{sample}", "isonclust.original.t{t}.w0.stderr"),
-    threads: 8
+    threads: workflow.cores
     shell:
         """
-        /usr/bin/time -vo {log.time} {input.exe} --fastq {input.fq} --mode pacbio --min-shared-minis {wildcards.t} --outfolder {params.d} --no-fastq 2> {log.stderr}
+        /usr/bin/time -vo {log.time} {input.exe} --fastq {input.fq} --mode {params.mode} --min-shared-minis {wildcards.t} --outfolder {params.d} --no-fastq 2> {log.stderr}
         mv {params.tsv} {output.tsv}
         """
 
