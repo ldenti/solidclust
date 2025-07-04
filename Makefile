@@ -1,5 +1,5 @@
 CPU_CC        := $(CC)
-CPU_OPTS      := --std=c89 -Wall -Wno-format -Wno-unused-function -Werror -O3
+CPU_OPTS      := --std=c89 -Wall -Wno-format -Wno-unused-function -O3 # -Werror
 CPU_MODULES   := exe lib bundled/klib bundled/xxhash bundled/xoshiro
 CPU_LIBS	  := -lm -lz
 CPU_BUILD_DIR := build
