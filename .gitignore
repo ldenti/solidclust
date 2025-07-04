@@ -34,6 +34,13 @@
 # macOS
 .DS_Store
 
-# executable
-ioc
+# IDEs
+.vscode/
 *~
+
+# executable
+build/
+*.bin
+
+# others
+unused/
