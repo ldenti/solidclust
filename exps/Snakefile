@@ -79,7 +79,7 @@ rule isonclust3_remake:
     threads: 1
     shell:
         """
-        /usr/bin/time -vo {log.time} ../build/isonclust -d {output.txt}.bin -m {params.mode} -t{wildcards.t} -i {input.fq} -o {output.txt} --post-cluster 0  2> {log.stderr}
+        /usr/bin/time -vo {log.time} ../build/solidclust -d {output.txt}.bin -m {params.mode} -t{wildcards.t} -i {input.fq} -o {output.txt} --post-cluster 0  2> {log.stderr}
         python3 scripts/format_ioc35.py {input.fq} {output.txt} > {output.tsv}
         """
 
@@ -100,7 +100,7 @@ rule isonclust3_weighted:
     threads: 1
     shell:
         """
-        /usr/bin/time -vo {log.time} ../build/isonclust -d {output.txt}.bin -m {params.mode} -t {wildcards.t} -i {input.fq} -o {output.txt} --weighted {wildcards.w} --post-cluster 0 2> {log.stderr}
+        /usr/bin/time -vo {log.time} ../build/solidclust -d {output.txt}.bin -m {params.mode} -t {wildcards.t} -i {input.fq} -o {output.txt} --weighted {wildcards.w} --post-cluster 0 2> {log.stderr}
         python3 scripts/format_ioc35.py {input.fq} {output.txt} > {output.tsv}
         """
 

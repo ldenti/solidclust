@@ -14,9 +14,9 @@ CPU_OBJ       := $(patsubst %.c,$(CPU_OBJ_DIR)/%.o,$(CPU_BASE))
 
 .PHONY: all checkdirs clean
 
-all: checkdirs build/isonclust
+all: checkdirs build/solidclust
 
-build/isonclust: $(CPU_OBJ)
+build/solidclust: $(CPU_OBJ)
 	$(CPU_CC) $(SANITIZER) $^ -o $@ $(CPU_LIBS)
 
 checkdirs: $(CPU_OBJ_DIR)
