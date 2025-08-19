@@ -140,7 +140,7 @@ def main():
 
     leg = plt.legend(
         custom_lines,
-        ["V (IOC3.5)", "ARI (IOC3.5)", "V (IOC3)", "ARI (IOC3)"],
+        ["V (SC)", "ARI (SC)", "V (IOC3)", "ARI (IOC3)"],
         ncol=2,
         # bbox_to_anchor=(0.15, -0.35),
         loc="lower left",
